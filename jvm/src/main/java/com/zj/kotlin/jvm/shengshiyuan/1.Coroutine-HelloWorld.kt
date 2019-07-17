@@ -13,6 +13,10 @@ fun main() {
     demo.test2()
 }
 
+/**
+ * GlobalScope.launch{}是最常用的Coroutine builders, 它不会
+ * 阻塞当前线程, 会在后台创建一个新的协程,也可以指定协程调度器.
+ */
 class HelloCoroutine1 {
 
     /**

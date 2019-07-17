@@ -19,6 +19,9 @@ fun main() {
     demo.test2()
 }
 
+/**
+ * runBlocking{}是创建一个新的协程同事阻塞当前线程,直到其内的协程结束.
+ */
 class HelloCoroutine2 {
 
     /**
@@ -44,9 +47,11 @@ class HelloCoroutine2 {
 
             /**
              * delay 是一个特殊的 挂起函数 ，它不会造成线程阻塞，但是会挂起协程，并且只能在协程中使用。
+             * 这里的delay是停止runBlocking创建的协程
              *
              * 延迟 2 秒来保证 JVM 的存活,
-             * 如果不加, 执行完2后jvm进程就结束了, 上面的Kotlin Coroutines不会打印
+             * 如果不加, 执行完2后jvm进程就结束了, 上面的Kotlin Coroutines不会打印,
+             * 因为GlobalScope.launch是又创建了一个新的协程,runBlocking并不能阻塞它
              */
             delay(2000)
 
