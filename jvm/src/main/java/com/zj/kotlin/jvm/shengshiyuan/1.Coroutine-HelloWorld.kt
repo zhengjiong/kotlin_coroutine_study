@@ -22,6 +22,7 @@ class HelloCoroutine1 {
     fun test1() {
         // 在后台启动一个新的协程并继续
         GlobalScope.launch {
+            //delay 是一个特殊的 挂起函数 ，它不会造成线程阻塞，但是会 挂起 协程，并且只能在协程中使用。
             delay(1000)// 非阻塞的等待 1 秒钟（默认时间单位是毫秒）
             Logger.i("world")// 在延迟后打印输出
         }
