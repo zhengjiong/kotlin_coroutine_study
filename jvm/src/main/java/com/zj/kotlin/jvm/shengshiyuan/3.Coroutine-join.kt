@@ -15,7 +15,8 @@ import kotlinx.coroutines.runBlocking
 
 fun main() {
     val demo = HelloCoroutine3()
-    demo.test1()
+    //demo.test1()
+    demo.test2()
 }
 
 class HelloCoroutine3 {
@@ -46,5 +47,28 @@ class HelloCoroutine3 {
 
             Logger.i("end")
         }
+    }
+
+    /**
+     * Thread[DefaultDispatcher-worker-1,5,main] -> 0
+     * Thread[main,5,main] -> end
+     */
+    fun test2() {
+        runBlocking {
+            GlobalScope.launch {
+                Logger.i(0)
+                delay(1000)
+                Logger.i(1)
+
+                GlobalScope.launch {
+                    Logger.i(2)
+                    delay(2000)
+                    Logger.i(3)
+                }.join()
+            }.join()
+
+            Logger.i("runBlocking end")
+        }
+        Logger.i("end")
     }
 }
