@@ -36,7 +36,11 @@ class HelloCoroutine3 {
             }
             Logger.i(2)
 
-            // 等待job协程执行结束,再继续执行后面的代码, 就可以不用delay了, 这样更优雅些
+            /**
+             * join是挂起当前的协成知道job执行结束才继续执行后面的代码.
+             *
+             * 等待job协程执行结束,再继续执行后面的代码, 就可以不用delay了, 这样更优雅些
+             */
             Logger.i("join")
             job.join()
 
