@@ -2,6 +2,7 @@ package com.zj.kotlin.jvm.shengshiyuan
 
 import com.zj.kotlin.jvm.Logger
 import kotlinx.coroutines.*
+import kotlin.coroutines.suspendCoroutine
 
 /**
  *
@@ -14,7 +15,8 @@ fun main() {
     val demo = HelloCoroutine4()
     //demo.test1()
     //demo.test2()
-    demo.test3()
+    //demo.test3()
+    demo.test4()
 }
 
 /**
@@ -128,5 +130,65 @@ class HelloCoroutine4 {
             Logger.i("runBlocking end")
         }
         Logger.i("end")
+    }
+
+    /**
+     * Thread[main,5,main] -> 4
+     * Thread[main,5,main] -> -3
+     * Thread[main,5,main] -> 1
+     * Thread[DefaultDispatcher-worker-1,5,main] -> -1
+     * Thread[main,5,main] -> -2
+     * Thread[main,5,main] -> -6
+     * Thread[DefaultDispatcher-worker-3,5,main] -> -5
+     * Thread[main,5,main] -> -4
+     * Thread[main,5,main] -> 5
+     * Thread[DefaultDispatcher-worker-2,5,main] -> -7
+     * Thread[DefaultDispatcher-worker-4,5,main] -> -8
+     * Thread[main,5,main] -> 6
+     * Thread[main,5,main] -> 3
+     */
+    fun test4() {
+        runBlocking {
+            /**
+             * 这里不使用GlobalScope.launch,直接使用runBlocking的CoroutineScope,才能实现让runBlocking不结束!
+             * 外部协程（runBlocking）直到在其作用域中启动的所有协程都执行完毕后才会结束。
+             */
+            launch {
+                delay(1000)
+                Logger.i("1")
+            }
+
+            GlobalScope.launch {
+                delay(1500)
+                Logger.i("-1")
+            }
+
+            GlobalScope.launch(context = this.coroutineContext) {
+                delay(2000)
+                Logger.i("-2")
+            }
+            Logger.i("4")
+            //coroutineScope会阻塞当前线程
+            coroutineScope {
+                Logger.i("-3")
+                delay(2500)
+                launch {
+                    Logger.i("-4")
+                }
+                launch (context = Dispatchers.Default){
+                    Logger.i("-5")
+                }
+                Logger.i("-6")
+            }
+            Logger.i("5")
+            //withContext会阻塞当前线程
+            withContext(Dispatchers.IO) {
+                Logger.i("-7")
+                delay(3000)
+                Logger.i("-8")
+            }
+            Logger.i("6")
+        }
+        Logger.i("3")
     }
 }
