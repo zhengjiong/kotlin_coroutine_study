@@ -1,10 +1,8 @@
 package com.zj.kotlin.jvm.zhihu
 
 import com.zj.kotlin.jvm.log
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.GlobalScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
+import kotlin.coroutines.coroutineContext
 
 /**
  * Created by zhengjiong
@@ -27,6 +25,7 @@ import kotlinx.coroutines.launch
  */
 suspend fun main() {
     log(1)
+
     val job = GlobalScope.launch(start = CoroutineStart.UNDISPATCHED) {
         //协程启动后会立即在当前线程执行
         log(2)
@@ -41,6 +40,10 @@ suspend fun main() {
         log(3)
     }
     log(4)
+    log("4-context->"+coroutineContext[Job.Key])//[main] 4-context->null
     job.join()
     log(5)
+
+
+    log("5-context->"+coroutineContext[Job.Key])//[DefaultDispatcher-worker-1] 5-context->null
 }
