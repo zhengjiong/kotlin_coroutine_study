@@ -6,6 +6,11 @@ package com.zj.kotlin.coroutine
  * @author 郑炯
  * @version 1.0
  */
+
+fun main(){
+
+}
+
 class Logger {
     companion object {
         fun i(any: Any?) {
