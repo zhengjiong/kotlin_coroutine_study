@@ -213,6 +213,7 @@ class HelloCoroutine4 {
             }
 
             //使用外层协程的上下文来启动协程, 才可以做到和上面launch同样的效果(外层协程等待内部协程结束才结束)
+            //结论:GlobalScope 启动的协程跟外部没有任何关系，外部也不会等他结束，除非主动调用它的 join 或者 await
             GlobalScope.launch(context = coroutineContext) {
                 log(3)
                 delay(2000)
