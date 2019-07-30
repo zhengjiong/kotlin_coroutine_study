@@ -1,6 +1,7 @@
 package com.zj.kotlin.jvm.shengshiyuan
 
 import com.zj.kotlin.jvm.Logger
+import com.zj.kotlin.jvm.log
 import kotlinx.coroutines.*
 import kotlin.coroutines.suspendCoroutine
 
@@ -16,7 +17,8 @@ fun main() {
     //demo.test1()
     //demo.test2()
     //demo.test3()
-    demo.test4()
+    //demo.test4()
+    demo.test5()
 }
 
 /**
@@ -175,7 +177,7 @@ class HelloCoroutine4 {
                 launch {
                     Logger.i("-4")
                 }
-                launch (context = Dispatchers.Default){
+                launch(context = Dispatchers.Default) {
                     Logger.i("-5")
                 }
                 Logger.i("-6")
@@ -190,5 +192,33 @@ class HelloCoroutine4 {
             Logger.i("6")
         }
         Logger.i("3")
+    }
+
+    /**
+     * 输出:
+     * 16:46:33:144 [main] start
+     * 16:46:33:150 [DefaultDispatcher-worker-1] 1
+     * 16:46:33:154 [DefaultDispatcher-worker-2] 3
+     * 16:46:34:160 [DefaultDispatcher-worker-3] 2
+     * 16:46:34:161 [main] end
+     */
+    fun test5() = runBlocking {
+        log("start")
+        GlobalScope.launch {
+            log(1)
+
+            launch {
+                delay(1000)
+                log(2)
+            }
+
+            //使用外层协程的上下文来启动协程, 才可以做到和上面launch同样的效果(外层协程等待内部协程结束才结束)
+            GlobalScope.launch(context = coroutineContext) {
+                log(3)
+                delay(2000)
+                log(4)
+            }
+        }.join()
+        log("end")
     }
 }
