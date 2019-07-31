@@ -7,7 +7,7 @@ import java.util.*
  * Created by zhengjiong
  * date: 2019/7/29 21:12
  */
-val dateFormat = SimpleDateFormat("HH:mm:ss:SSS")
+val dateFormat = SimpleDateFormat("yyy-MM-dd HH:mm:ss:")
 
 val now = {
     dateFormat.format(Date(System.currentTimeMillis()))

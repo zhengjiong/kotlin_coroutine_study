@@ -24,6 +24,14 @@ import java.util.concurrent.ThreadFactory
  * 这二者可以很方便的创建绑定到特定线程的调度器，但过于简洁的 API 似乎会让人忘记它的风险。Kotlin 一向不爱做
  * 这种不清不楚的事儿，所以你呢，还是像我们这一节例子当中那样自己去构造线程池吧，这样好歹自己忘了关闭也怨不着别人。
  *
+ *
+ *
+ * 输出:
+ * 22:06:28:960 [main] start
+ * 22:06:29:058 [main] newThread
+ * 22:06:29:059 [MyThread] 1
+ * 22:06:29:068 [main] end 或者 [MyThread] end
+
  */
 suspend fun main() {
     log("start")

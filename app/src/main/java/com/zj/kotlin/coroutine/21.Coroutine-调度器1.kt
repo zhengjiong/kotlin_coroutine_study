@@ -62,7 +62,7 @@ class MainActivity : AppCompatActivity() {
         log("getUserCoroutine end")
     }
 
-    //getUser 函数需要切到其他线程执行，因此回调通常也会在这个非 UI 的线程中调用
+    //getUser函数需要切到其他线程执行，因此回调通常也会在这个非UI的线程中调用
     fun getUser(callBack: Callback) {
         log("getUser start")
         thread(isDaemon = true) {
