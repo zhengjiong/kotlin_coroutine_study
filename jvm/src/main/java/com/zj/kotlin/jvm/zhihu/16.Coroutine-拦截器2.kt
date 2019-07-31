@@ -8,7 +8,6 @@ import kotlinx.coroutines.launch
 
 /**
  *
- * Company: 上加下信息技术成都有限公司
  * CreateTime:2019-07-30  17:55
  * @author 郑炯
  * @version 1.0
@@ -18,7 +17,7 @@ import kotlinx.coroutines.launch
  * 输出:
  *
  *
- * 22:23:13:954 [main] start
+ * 22:23:13:954  [main] start
  * 222:23:14:004 [main] MyContinuationInterceptor interceptContinuation
  * 222:23:14:007 [main] MyContinuation resumeWith Success(kotlin.Unit)
  * 222:23:14:007 [main] 1
