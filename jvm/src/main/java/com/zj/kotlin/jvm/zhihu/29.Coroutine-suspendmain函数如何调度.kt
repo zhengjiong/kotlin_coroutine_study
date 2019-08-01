@@ -19,7 +19,7 @@ suspend fun main() {
  */
 private suspend fun test1() {
     log(1)
-    GlobalScope.launch (context = EmptyCoroutineContext){
+    GlobalScope.launch {
         log(2)
     }.join()
     log(3)
@@ -27,7 +27,7 @@ private suspend fun test1() {
 
 private fun test2() {
 
-    //runSuspend位于RunSuspendKt文件中,RunSuspend其实是一个Continuation的实现,
+    //结论:runSuspend位于RunSuspendKt文件中,RunSuspend其实是一个Continuation的实现,
     //它的上下文是空的，因此 suspend main 启动的协程并不会有任何调度行为。
     /*runSuspend {
         log(1)
