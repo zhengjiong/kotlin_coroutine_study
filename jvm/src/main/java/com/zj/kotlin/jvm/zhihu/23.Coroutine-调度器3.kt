@@ -21,6 +21,7 @@ import java.util.concurrent.Executors
  * 对比这二者，10个线程的情况线程切换次数最少 3次，而 1 个线程的情况则只要 delay 1000ms 之后恢复执行的时候那一次。
  *
  * 结论:除了 delay 那里有一次不可避免的线程切换外，其他几处协程挂起点的继续操作（Continuation.resume）都会切线程.
+ * launch的时候会发生Continuation.resume，所以才会有协程启动时的第一次调度
  *
  * 下面的代码其实是很消耗性能的写法, 不应该创建这么多线程这么多线程应该直接用Executors.newSingleThreadExecutor(),
  * 就不会造成频繁的线程切换.
