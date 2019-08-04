@@ -18,7 +18,8 @@ fun main() {
     //demo.test2()
     //demo.test3()
     //demo.test4()
-    demo.test5()
+    //demo.test5()
+    demo.test6()
 }
 
 /**
@@ -220,6 +221,24 @@ class HelloCoroutine4 {
                 log(4)
             }
         }.join()
+        log("end")
+    }
+
+    fun test6() = runBlocking {
+        log("start")
+
+        GlobalScope.launch {
+            log(1)
+
+            //coroutineScope会阻塞当前线程
+            coroutineScope {
+                log(2)
+                delay(1000)
+                log(3)
+            }
+            log(4)
+        }.join()
+
         log("end")
     }
 }

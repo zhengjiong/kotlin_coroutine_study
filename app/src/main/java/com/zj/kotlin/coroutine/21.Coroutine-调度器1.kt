@@ -22,6 +22,10 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
 
 
+        test1()
+    }
+
+    private fun test1() {
         /**
          * 输出:
         23:19:26:088[main] onClick start
