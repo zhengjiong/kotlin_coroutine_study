@@ -23,6 +23,18 @@
                 android:layout_height="wrap_content"
                 android:textAllCaps="false"
                 android:text="demo2"/>
+        <Button
+                android:id="@+id/btn3"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAllCaps="false"
+                android:text="demo3"/>
+        <Button
+                android:id="@+id/btn4"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:textAllCaps="false"
+                android:text="demo4"/>
     </LinearLayout>
 
 </ScrollView>

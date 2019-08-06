@@ -50,6 +50,17 @@ class MainActivity : AppCompatActivity() {
             }
             log("onClick end")
         }
+
+        btn2.setOnClickListener {
+            GlobalScope.launch(Dispatchers.Main) {
+                for (i in 0..3) {
+                    delay(1000)
+                    //Thread.sleep(1000)//如果用Thread.sleep就会卡主线程
+                    btn2.text = i.toString()
+                }
+                btn2.text = "done!"
+            }
+        }
     }
 
     /**
