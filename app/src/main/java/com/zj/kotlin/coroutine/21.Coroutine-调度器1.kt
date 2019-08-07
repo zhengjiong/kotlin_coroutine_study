@@ -7,6 +7,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import kotlin.concurrent.thread
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
@@ -60,6 +62,14 @@ class MainActivity : AppCompatActivity() {
                 }
                 btn2.text = "done!"
             }
+        }
+
+        btn3.setOnClickListener {
+            OkHttpClient().newCall(
+                Request.Builder()
+                    .url("")
+                    .build()
+            )
         }
     }
 
