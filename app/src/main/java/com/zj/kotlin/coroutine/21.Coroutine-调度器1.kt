@@ -1,5 +1,6 @@
 package com.zj.kotlin.coroutine
 
+import android.content.Intent
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
 import kotlinx.android.synthetic.main.activity_main.*
@@ -65,11 +66,7 @@ class MainActivity : AppCompatActivity() {
         }
 
         btn3.setOnClickListener {
-            OkHttpClient().newCall(
-                Request.Builder()
-                    .url("")
-                    .build()
-            )
+            startActivity(Intent(this, Coroutine_Cancel_Example::class.java))
         }
     }
 

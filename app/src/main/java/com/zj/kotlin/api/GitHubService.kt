@@ -3,6 +3,7 @@ package com.zj.kotlin.api
 import com.zj.kotlin.bean.User
 import okhttp3.Interceptor
 import okhttp3.OkHttpClient
+import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
 import retrofit2.http.Path
 
