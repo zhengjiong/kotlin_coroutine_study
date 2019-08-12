@@ -28,7 +28,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:textAllCaps="false"
-                android:text="demo3"/>
+                android:text="协程取消"/>
         <Button
                 android:id="@+id/btn4"
                 android:layout_width="match_parent"
