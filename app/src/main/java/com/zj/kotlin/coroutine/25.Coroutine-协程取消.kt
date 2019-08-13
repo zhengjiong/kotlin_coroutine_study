@@ -11,6 +11,7 @@ import okhttp3.Request
 import okhttp3.Response
 import retrofit2.HttpException
 import java.io.IOException
+import java.lang.IllegalStateException
 import java.lang.NullPointerException
 import kotlin.coroutines.resumeWithException
 
@@ -43,7 +44,7 @@ class Coroutine_Cancel_Example : AppCompatActivity() {
             log("onclick start")
             MainScope().launch {
                 log("1-launch")
-                val user = getUserCoroutine()
+                val user = getUserCoroutine1()
                 log("user= $user")
             }
             log("onclick end")
@@ -67,7 +68,7 @@ class Coroutine_Cancel_Example : AppCompatActivity() {
                 log("1-launch")
                 val job = launch {
                     log("2-launch start")
-                    val user = getUserCoroutine()
+                    val user = getUserCoroutine1()
                     log("3")
                 }
                 delay(20)
@@ -94,7 +95,7 @@ class Coroutine_Cancel_Example : AppCompatActivity() {
                 log("1-launch")
                 val job = launch {
                     log("2-launch start")
-                    val user = getUserCoroutine()
+                    val user = getUserCoroutine1()
                     log("3")
                 }
                 delay(20)
@@ -103,9 +104,29 @@ class Coroutine_Cancel_Example : AppCompatActivity() {
             }
             log("onclick end")
         }
+
+        btn4.setOnClickListener {
+            log("onclick start")
+            MainScope().launch {
+                log("1-launch")
+                val job = launch {
+                    log("2-launch start")
+                    try {
+                        val user = getUserCoroutine2()
+                    } catch (e: Exception) {
+                        println("try e=${e.message}")
+                    }
+                    log("3")
+                }
+                delay(20)
+                //job.cancelAndJoin()
+                log("2-launch end")
+            }
+            log("onclick end")
+        }
     }
 
-    suspend fun getUserCoroutine() = suspendCancellableCoroutine<String> { continuation ->
+    suspend fun getUserCoroutine1() = suspendCancellableCoroutine<String> { continuation ->
         log("getUserCoroutine start")
         val call =
             OkHttpClient.Builder()
@@ -136,7 +157,7 @@ class Coroutine_Cancel_Example : AppCompatActivity() {
                 continuation.resumeWithException(e)
             }
 
-            /*override fun onResponse(call: Call, response: Response) {
+            override fun onResponse(call: Call, response: Response) {
                 log("onResponse = " + response.code())
                 try {
                     response.body()?.let {
@@ -147,25 +168,60 @@ class Coroutine_Cancel_Example : AppCompatActivity() {
                 } catch (e: Exception) {
                     continuation.resumeWithException(e)
                 }
-            }*/
+            }
+
+        })
+        log("getUserCoroutine end")
+    }
+
+    suspend fun getUserCoroutine2() = suspendCancellableCoroutine<String> { continuation ->
+        log("getUserCoroutine start")
+        val call =
+            OkHttpClient.Builder()
+                .addInterceptor {
+                    it.proceed(it.request()).apply {
+                        log("addInterceptor code:${this.code()} ${this.body().toString()}")
+                    }
+                }
+                .build()
+                .newCall(
+                    Request.Builder()
+                        .get().url("https://api.github.com/users/zhengjiong")
+                        .build()
+                )
+
+
+
+        continuation.invokeOnCancellation {
+            log("invokeOnCancellation invoke")
+            if (!call.isCanceled) {
+                call.cancel()
+            }
+        }
+
+
+        call.enqueue(object : okhttp3.Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                log("onFailure = ${e}")
+                continuation.resumeWithException(e)
+            }
 
             override fun onResponse(call: Call, response: Response) {
                 log("onResponse = " + response.code())
                 continuation.resumeWith(runCatching {
-                    /* response.body()?.let {
-                         continuation.resume(it.string()) {
-                             log("onResponse cancel ${it.message}")
-                         }
-                     } ?: continuation.resumeWithException(NullPointerException("null point"))*/
+                    if (true) {
+                        throw IllegalStateException("test error")
+                    }
                     if (response.isSuccessful) {
                         response.body()?.string()
                             ?: throw NullPointerException("Response body is null: $response")
                     } else {
-                        throw HttpException(retrofit2.Response.error<Any>(response.code(), response.body()!!))
+                        throw HttpException(retrofit2.Response.error<Any>(response.code(), response.body()))
                     }
                 })
             }
         })
+
         log("getUserCoroutine end")
     }
 }
