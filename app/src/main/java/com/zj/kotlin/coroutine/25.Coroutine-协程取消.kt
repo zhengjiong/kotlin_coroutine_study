@@ -9,6 +9,7 @@ import okhttp3.Call
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import retrofit2.HttpException
 import java.io.IOException
 import java.lang.NullPointerException
 import kotlin.coroutines.resumeWithException
@@ -135,7 +136,7 @@ class Coroutine_Cancel_Example : AppCompatActivity() {
                 continuation.resumeWithException(e)
             }
 
-            override fun onResponse(call: Call, response: Response) {
+            /*override fun onResponse(call: Call, response: Response) {
                 log("onResponse = " + response.code())
                 try {
                     response.body()?.let {
@@ -146,6 +147,23 @@ class Coroutine_Cancel_Example : AppCompatActivity() {
                 } catch (e: Exception) {
                     continuation.resumeWithException(e)
                 }
+            }*/
+
+            override fun onResponse(call: Call, response: Response) {
+                log("onResponse = " + response.code())
+                continuation.resumeWith(runCatching {
+                    /* response.body()?.let {
+                         continuation.resume(it.string()) {
+                             log("onResponse cancel ${it.message}")
+                         }
+                     } ?: continuation.resumeWithException(NullPointerException("null point"))*/
+                    if (response.isSuccessful) {
+                        response.body()?.string()
+                            ?: throw NullPointerException("Response body is null: $response")
+                    } else {
+                        throw HttpException(retrofit2.Response.error<Any>(response.code(), response.body()!!))
+                    }
+                })
             }
         })
         log("getUserCoroutine end")
