@@ -209,9 +209,9 @@ class Coroutine_Cancel_Example : AppCompatActivity() {
             override fun onResponse(call: Call, response: Response) {
                 log("onResponse = " + response.code())
                 continuation.resumeWith(runCatching {
-                    if (true) {
+                    /*if (true) {
                         throw IllegalStateException("test error")
-                    }
+                    }*/
                     if (response.isSuccessful) {
                         response.body()?.string()
                             ?: throw NullPointerException("Response body is null: $response")
