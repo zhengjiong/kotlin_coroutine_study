@@ -30,4 +30,5 @@ val gitHubServiceApi by lazy {
         .baseUrl("https://api.github.com")
         .addConverterFactory(GsonConverterFactory.create())
         .build()
+    retrofit
 }
