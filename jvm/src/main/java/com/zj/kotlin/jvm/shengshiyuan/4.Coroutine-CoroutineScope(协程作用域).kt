@@ -14,12 +14,12 @@ import kotlin.coroutines.suspendCoroutine
 
 fun main() {
     val demo = HelloCoroutine4()
-    //demo.test1()
+    demo.test1()
     //demo.test2()
     //demo.test3()
     //demo.test4()
     //demo.test5()
-    demo.test6()
+    //demo.test6()
 }
 
 /**
@@ -35,17 +35,21 @@ class HelloCoroutine4 {
 
     /**
      * 输出:
+     * Thread[main,5,main] -> -1
      * Thread[main,5,main] -> 2
+     * Thread[main,5,main] -> 0
      * Thread[main,5,main] -> 1
      * Thread[main,5,main] -> 3
      */
     fun test1() {
         runBlocking {
+            Logger.i("-1")
             /**
              * 这里不使用GlobalScope.launch,直接使用runBlocking的CoroutineScope,才能实现让runBlocking不结束!
              * 外部协程（runBlocking）直到在其作用域中启动的所有协程都执行完毕后才会结束。
              */
             launch {
+                Logger.i("0")
                 delay(2000)
                 Logger.i("1")
             }
@@ -56,7 +60,7 @@ class HelloCoroutine4 {
              */
             Logger.i("2")
         }
-        Logger.i(3)
+        Logger.i("3")
     }
 
     /**

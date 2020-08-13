@@ -1,7 +1,7 @@
 package com.zj.kotlin.coroutine
 
 import android.os.Bundle
-import android.support.v7.app.AppCompatActivity
+import androidx.appcompat.app.AppCompatActivity
 import com.zj.kotlin.bean.User
 import kotlinx.android.synthetic.main.activity_coroutine_cancel.*
 import kotlinx.coroutines.*

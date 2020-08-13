@@ -41,7 +41,7 @@ class HelloCoroutine2 {
                 //delay(2000)
                 Thread.sleep(2000)
                 Logger.i("Kotlin Coroutines")
-            }
+            }   
 
             Logger.i("1")
 

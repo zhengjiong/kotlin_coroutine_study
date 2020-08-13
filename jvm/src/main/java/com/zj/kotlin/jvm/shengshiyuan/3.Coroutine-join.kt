@@ -51,6 +51,10 @@ class HelloCoroutine3 {
 
     /**
      * Thread[DefaultDispatcher-worker-1,5,main] -> 0
+     * Thread[DefaultDispatcher-worker-1,5,main] -> 1
+     * Thread[DefaultDispatcher-worker-1,5,main] -> 2
+     * Thread[DefaultDispatcher-worker-1,5,main] -> 3
+     * Thread[main,5,main] -> runBlocking end
      * Thread[main,5,main] -> end
      */
     fun test2() {
