@@ -1,10 +1,11 @@
 package com.zj.kotlin.coroutine
 
 import android.os.Bundle
+import android.view.View
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
+import com.zj.kotlin.utils.awaitNextLayout
 import kotlinx.android.synthetic.main.activity_demo3.*
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.concurrent.thread
@@ -21,7 +22,7 @@ class Demo3Activity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_demo2)
+        setContentView(R.layout.activity_demo3)
 
         /*
         在 Kotlin 协程库中，有很多协程的构造器方法，这些构造器方法内部可以使用挂起函数来封装回调的 API。
@@ -63,6 +64,31 @@ class Demo3Activity : AppCompatActivity() {
             } catch (e: Exception) {
                 e.printStackTrace()
             }
+        }
+
+        lifecycleScope.launch {
+            tvTitle.visibility = View.GONE
+            tvTitle.text = ""
+
+            //1->tvTitle.width=0
+            println("1->tvTitle.width=" + tvTitle.width)
+            // 等待下一次布局事件的任务，然后才可以获取该视图的高度
+            tvTitle.awaitNextLayout()
+
+            //2->tvTitle.width=258
+            println("2->tvTitle.width=" + tvTitle.width)
+
+            // 布局任务被执行
+            // 现在，我们可以将视图设置为可见，并其向上平移，然后执行向下的动画
+            tvTitle.visibility = View.VISIBLE
+            tvTitle.translationX = -tvTitle.width.toFloat()
+            tvTitle.animate().translationY(0f)
+        }
+
+        btn2.setOnClickListener {
+            // 将该视图设置为可见，再设置一些文字
+            tvTitle.visibility = View.VISIBLE
+            tvTitle.text = "Hi everyone!"
         }
     }
 }

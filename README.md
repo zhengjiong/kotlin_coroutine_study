@@ -141,3 +141,64 @@ public suspend fun <R> coroutineScope(
 
 #### 4.具体用例
 
+##### 1.等待 View 布局完成后，获取布局大小
+
+封装了一个等待 View 传递下一次布局事件的任务 (比如说，我们改变了一个 TextView 中的内容，需要等待布局事件完成后才能获取该控件的新尺寸):
+
+```
+suspend fun View.awaitNextLayout() = suspendCancellableCoroutine<Unit> { cont ->
+    // 这里的 lambda 表达式会被立即调用，允许我们创建一个监听器
+    val listener = object : View.OnLayoutChangeListener {
+        override fun onLayoutChange(v: View?,left: Int, top: Int,right: Int,
+            bottom: Int,
+            oldLeft: Int,
+            oldTop: Int,
+            oldRight: Int,
+            oldBottom: Int
+        ) {
+            // 视图的下一次布局任务被调用
+            // 先移除监听，防止协程泄漏
+            removeOnLayoutChangeListener(this)
+            
+            // 这里如果resume不调用协程会一直挂起，知道onLayoutChange被回调然后onResume被调用
+            // 最终，唤醒协程，恢复执行
+            cont.resume(Unit)
+        }
+    }
+    // 如果协程被取消，移除该监听
+    cont.invokeOnCancellation { removeOnLayoutChangeListener(listener) }
+  
+    addOnLayoutChangeListener(listener)
+
+    // 这样协程就被挂起了，除非监听器中的 cont.resume() 方法被调用
+}
+```
+
+然后在activity中调用:
+
+```
+lifecycleScope.launch {
+    tvTitle.visibility = View.GONE
+    tvTitle.text = ""
+
+    //1->tvTitle.width=0
+    println("1->tvTitle.width=" + tvTitle.width)
+    // 等待下一次布局事件的任务，然后才可以获取该视图的高度
+    tvTitle.awaitNextLayout()
+
+    //2->tvTitle.width=258
+    println("2->tvTitle.width=" + tvTitle.width)
+
+    // 布局任务被执行
+    // 现在，我们可以将视图设置为可见，并其向上平移，然后执行向下的动画
+    tvTitle.visibility = View.VISIBLE
+    tvTitle.translationX = -tvTitle.width.toFloat()
+    tvTitle.animate().translationY(0f)
+}
+
+btn2.setOnClickListener {
+    // 将该视图设置为可见，再设置一些文字
+    tvTitle.visibility = View.VISIBLE
+    tvTitle.text = "Hi everyone!"
+}
+```

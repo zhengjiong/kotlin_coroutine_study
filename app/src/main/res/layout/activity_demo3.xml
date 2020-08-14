@@ -17,6 +17,21 @@
                 android:layout_height="wrap_content"
                 android:text="btn1"
                 android:textAllCaps="false" />
+
+        <Button
+                android:id="@+id/btn2"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="layout"
+                android:textAllCaps="false" />
+
+
+        <TextView
+                android:id="@+id/tvTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:textSize="18sp"/>
     </LinearLayout>
 
 </ScrollView>
