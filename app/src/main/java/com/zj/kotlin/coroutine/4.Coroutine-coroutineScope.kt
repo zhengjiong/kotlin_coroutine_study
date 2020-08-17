@@ -4,10 +4,7 @@ import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.android.synthetic.main.activity_demo3.*
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.*
 import kotlin.concurrent.thread
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -42,7 +39,7 @@ class Demo4Activity : AppCompatActivity() {
                     val result = coroutineScope<String> {
                         log("coroutineScope  start")
                         //it.invokeOnCancellation {
-                            //log("invokeOnCancellation")
+                        //log("invokeOnCancellation")
                         //}
                         //suspendCancellableCoroutine并不是启动一个协程,所以不能使用delay函数
                         delay(1000)
@@ -54,6 +51,28 @@ class Demo4Activity : AppCompatActivity() {
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+        }
+
+
+
+        /*
+        [main]->coroutineScope end
+        [DefaultDispatcher-worker-2]->launch end
+        [main]->lifecycleScope end
+         */
+        btn2.setOnClickListener {
+            lifecycleScope.launch {
+                //这里适合用withContext替代就可以少一层嵌套，如果内部代码会自己启动一个新线程的话，使用coroutineScope比withContext更好
+                coroutineScope {
+                    launch(Dispatchers.Default) {
+                        delay(2000)
+                        log("launch end")
+                    }
+                    log("coroutineScope end")
+                }
+
+                log("lifecycleScope end")
             }
         }
     }

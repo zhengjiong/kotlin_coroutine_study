@@ -50,7 +50,7 @@ lifecycleScope.launch(CoroutineName("线程名-1")) {
 }
 ```
 
-### 2.调度器
+### 2.拦截器
 
 拦截协程的方法也很简单，因为协程的本质就是回调 + “黑魔法”，而这个回调就是被拦截的 `Continuation` 。
 
@@ -101,7 +101,7 @@ public actual val Main: MainCoroutineDispatcher get() = MainDispatcherLoader.dis
 public val IO: CoroutineDispatcher = DefaultScheduler.IO
 ```
 
-## 2.常用挂起函数(suspendCancellableCoroutine、withContext、coroutineScope)
+## 2.常用挂起函数(suspendCancellableCoroutine、withContext、coroutineScope、supervisorScope)
 
 ### 1.launch,async
 
@@ -193,25 +193,119 @@ suspend fun getUserCoroutine(): String = suspendCoroutine<String> { continuation
 }
 //耗时函数
 fun getUser(callBack: Callback) {
-        thread(isDaemon = true) {
-            Thread.sleep(1000)
-            callBack.invoke("zj")
-        }
+  thread(isDaemon = true) {
+    Thread.sleep(1000)
+    callBack.invoke("zj")
+  }
 }
 
 ```
 
+### 4.coroutineScope和supervisorScope
 
+为了做到结构化并发并避免泄漏的情况发生想要创建多个协程，可以在 suspend function 中使用名为 coroutineScope 或 supervisorScope 这样的构造器来启动多个协程，可以安全地从 suspend 函数中启动协程。
 
-### 4.使用区别
+```kotlin
+/*
+[main]->coroutineScope end
+[DefaultDispatcher-worker-2]->launch end
+[main]->lifecycleScope end
+ */
+btn2.setOnClickListener {
+    lifecycleScope.launch {
+      	//启动一个新协程,但是coroutineScope是挂起函数,会挂起当前线程
+        coroutineScope {
+            //启动一个新协程,不是挂起函数,后面会继续执行
+            launch(Dispatchers.Default) {
+                delay(2000)
+                log("launch end")
+            }
+            log("coroutineScope end")
+        }
+
+        log("lifecycleScope end")
+    }
+}
+```
+
+### 5.使用区别
 
 #### 1.相同点
 
-suspendCancellableCoroutine、withContext、coroutineScope的相同点是，他们都是挂起函数，都可以有返回值。
+suspendCancellableCoroutine、withContext、coroutineScope、supervisorScope的相同点是，他们都是挂起函数，都可以有返回值。
 
 #### 2.不同点
 
-withContext可以用来切换线程，但是不能封装回调api，而suspendCancellableCoroutine是用来封装回调api，使用resume 或者 resumeWithException 来返回结果或者抛出异常，只是不能切换线程，但是可以在内部启动线程来切换线程，还有一个重要区别是传给它的block参数并不是一个挂起函数，只是个普通函数（适合用来封装回调api），而传递给withContext和coroutineScope的block参数都是挂起函数，所以suspendCancellableCoroutine的block内部不能使用delay这类挂起函数，而withContext和coroutineScope可以使用delay等挂起函数。suspendCancellableCoroutine还具有一个invokeOnCancellation来监听协程是否取消。
+`withContext`可以用来切换线程，但是不能封装回调api，而`suspendCancellableCoroutine`是用来封装回调api，使用`resume` 或者 `resumeWithException` 来返回结果或者抛出异常，只是不能切换线程，但是可以在内部启动线程来切换线程，还有一个重要区别是传给它的block参数并不是一个挂起函数，只是个普通函数（适合用来封装回调api），而传递给`withContext`和`coroutineScope`的block参数都是挂起函数，所以`suspendCancellableCoroutine`的block内部不能使用`delay`这类挂起函数，而`withContext`和`coroutineScope`可以使用delay等挂起函数。`suspendCancellableCoroutine`还具有一个`invokeOnCancellation`来监听协程是否取消。
+
+`coroutineScope`或`supervisorScope`可以创建协程但是它们和launch或者async的区别是，前者是挂起函数，必须在协程中调用，后者只是普通函数，可以在任何地方启动协程，然后挂起函数会让外层函数等待执行完成。
+
+`withContext`和`coroutineScope`都是挂起函数，withContext(IO)可以直接切换线程，而coroutineScope不能传递一个调度器，只能在内部重新launch一个协程才可以切换线程。
+
+##### 使用withContext
+
+```kotlin
+lifecycleScope.launch {
+    //这里适合用withContext替代coroutineScope就可以少一层嵌套
+    withContext(IO) {
+        //...耗时操作
+    }
+}
+```
+
+##### 使用CoroutineScope
+
+```kotlin
+lifecycleScope.launch {
+    //启动一个协程,coroutineScope是一个挂起函数, end将会最后执行
+    coroutineScope {
+      	//如果内部代码会自己启动一个新线程的话，使用coroutineScope比withContext更好,不然会有两次线程切换
+     		//或者其他启动线程方式
+        thread{
+          //...耗时操作
+        }
+    }
+}
+```
+
+##### 使用CoroutineScope
+
+```kotlin
+lifecycleScope.launch {
+    coroutineScope {
+        launch(IO){
+          //启动一个协程,外层coroutineScope是一个挂起函数, end将会最后执行
+          //...耗时操作
+        }
+    }
+  	println("end")
+}
+```
+
+##### 使用suspendCancellableCoroutine或者suspendCoroutine封装回调
+
+```kotlin
+lifecycleScope.launch {
+    suspendCancellableCoroutine {
+        getUser{
+          	//suspendCancellableCoroutine比suspendCoroutine多一个invokeOnCancellation方法
+          	it.invokeOnCancellation{
+              log("invokeOnCancellation")
+            }
+          	//getUser会启动一个线程,比如okhttp的enquee
+          	try{
+              ...
+              it.resume(result)
+            }catch(e: Exception){
+              it.resumeWithException(e)
+            }
+        }
+    }
+  	println("end")
+}
+```
+
+
 
 #### 3.使用场景
 
