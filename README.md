@@ -1,12 +1,113 @@
 # 协程知识点总结
 
-## 1.常用挂起函数(suspendCancellableCoroutine、withContext、coroutineScope)
+## 1.CoroutineContext(协程上下文、拦截器、调度器)
+
+调度器和拦截器本质上就是一个协程上下文的实现。
+
+### 1.上下文
+
+`launch` 函数有三个参数(上下文,启动模式,协程体)，第一个参数叫 **上下文**，它的接口类型是 `CoroutineContext`，通常我们见到的上下文的类型是 `CombinedContext` 或者 `EmptyCoroutineContext`，一个表示上下文的组合，另一个表示什么都没有。
+
+`CoroutineContext` 作为一个集合，它的元素就是源码中看到的 `Element`，每一个 `Element` 都有一个 `key`，因此它可以作为元素出现，同时它也是 `CoroutineContext` 的子接口，因此也可以作为集合出现。
+
+```kotlin
+public interface CoroutineContext {
+    public operator fun <E : Element> get(key: Key<E>): E?
+    public interface Key<E : Element>
+    public interface Element : CoroutineContext {
+        public val key: Key<*>
+        public override operator fun <E : Element> get(key: Key<E>): E? =
+            if (this.key == key) this as E else null
+
+    }
+}
+```
+
+launch函数会返回一个Job。
+
+```kotlin
+public interface Job : CoroutineContext.Element {
+    /**
+     * Key for [Job] instance in the coroutine context.
+     */
+    public companion object Key : CoroutineContext.Key<Job> 
+    ...
+ }   
+```
+
+我们如果想要找到某一个特别的上下文实现，就需要用对应的 `Key` 来查找，例如：
+
+这里的 `Job` 实际上是对它的 `companion object Key` 的引用
+
+```kotlin
+lifecycleScope.launch(CoroutineName("线程名-1")) {
+   //获取当前协程的job
+		println(coroutineContext[Job])	//等价于coroutineContext[Job.Key]
+  	println(job?.isActive)
+  
+	  //获取coroutineName
+	  println(coroutineContext[CoroutineName.Key])
+}
+```
+
+### 2.调度器
+
+拦截协程的方法也很简单，因为协程的本质就是回调 + “黑魔法”，而这个回调就是被拦截的 `Continuation` 。
+
+```kotlin
+@SinceKotlin("1.3")
+public interface ContinuationInterceptor : CoroutineContext.Element {
+		companion object Key : CoroutineContext.Key<ContinuationInterceptor>
+		public fun <T> interceptContinuation(continuation: Continuation<T>): Continuation<T>
+}
+```
+
+自己定义一个拦截器:
+
+```kotlin
+class MyContinuationInterceptor : ContinuationInterceptor {
+    override val key: CoroutineContext.Key<*>
+        get() = ContinuationInterceptor.Key
+
+    override fun <T> interceptContinuation(continuation: Continuation<T>): Continuation<T> {
+        log("MyContinuationInterceptor interceptContinuation")
+        return MyContinuation(continuation)
+    }
+}
+fun test(){
+  GlobalScope.launch(context = MyContinuationInterceptor())
+}
+```
+
+所有协程启动的时候，都会有一次 `Continuation.resumeWith` 的操作，这一次操作对于调度器来说就是一次调度的机会。
+
+如果我们在拦截器当中自己处理了线程切换，那么就实现了自己的一个简单的调度器。
+
+### 3.调度器
+
+```kotlin
+public abstract class CoroutineDispatcher :
+    AbstractCoroutineContextElement(ContinuationInterceptor), ContinuationInterceptor {
+      public abstract fun dispatch(context: CoroutineContext, block: Runnable)
+      public final override fun <T> interceptContinuation(continuation: Continuation<T>): Continuation<T> = DispatchedContinuation(this, continuation)
+}
+```
+
+它本身是协程上下文的子类，同时实现了拦截器的接口， `dispatch` 方法会在拦截器的方法 `interceptContinuation` 中调用，进而实现协程的调度。所以如果我们想要实现自己的调度器，继承这个类就可以了，不过通常我们都用现成的，它们定义在 `Dispatchers` 当中：
+
+```kotlin
+public actual val Default: CoroutineDispatcher = createDefaultDispatcher()
+public actual val Main: MainCoroutineDispatcher get() = MainDispatcherLoader.dispatcher
+public val IO: CoroutineDispatcher = DefaultScheduler.IO
+```
+
+## 2.常用挂起函数(suspendCancellableCoroutine、withContext、coroutineScope)
 
 ### 1.launch,async
 
 协程内部使用launch或者async函数会启动一个新的协程，并不是挂起函数，所以后面的代码还是会继续执行，"end"会在"2"之前打印出来, 除非使用join或者await
 
-```
+```kotlin
 /*
 [main]->start
 [main]->end
@@ -50,7 +151,7 @@ btn2.setOnClickListener {
 
 suspendCancellableCoroutine、withContext、coroutineScope的具体区别看下面。
 
-```
+```kotlin
 /*                                                                               
 [main]->start                                                                    
 [DefaultDispatcher-worker-1]->withContext start                                  
@@ -83,7 +184,7 @@ btn1.setOnClickListener {
 
 注意点：必须在block代码块中使用resume或者resumeWithException，否则该函数会一直挂起，后续代码将无法调用。
 
-```
+```kotlin
 suspend fun getUserCoroutine(): String = suspendCoroutine<String> { continuation->
     getUser {
         log("continuation resume $it")
@@ -120,20 +221,20 @@ withContext和coroutineScope非常类似，在协程中需要切换线程的时�
 
 3个方法的定义如下
 
-```
+```kotlin
 public suspend inline fun <T> suspendCancellableCoroutine(
     crossinline block: (CancellableContinuation<T>) -> Unit
 ): T
 ```
 
-```
+```kotlin
 public suspend fun <T> withContext(
     context: CoroutineContext,
     block: suspend CoroutineScope.() -> T
 ): T
 ```
 
-```
+```kotlin
 public suspend fun <R> coroutineScope(
 		block: suspend CoroutineScope.() -> R
 ): R
@@ -145,7 +246,7 @@ public suspend fun <R> coroutineScope(
 
 封装了一个等待 View 传递下一次布局事件的任务 (比如说，我们改变了一个 TextView 中的内容，需要等待布局事件完成后才能获取该控件的新尺寸):
 
-```
+```kotlin
 suspend fun View.awaitNextLayout() = suspendCancellableCoroutine<Unit> { cont ->
     // 这里的 lambda 表达式会被立即调用，允许我们创建一个监听器
     val listener = object : View.OnLayoutChangeListener {
@@ -176,7 +277,7 @@ suspend fun View.awaitNextLayout() = suspendCancellableCoroutine<Unit> { cont ->
 
 然后在activity中调用:
 
-```
+```kotlin
 lifecycleScope.launch {
     tvTitle.visibility = View.GONE
     tvTitle.text = ""
@@ -202,3 +303,12 @@ btn2.setOnClickListener {
     tvTitle.text = "Hi everyone!"
 }
 ```
+
+
+
+## 5.知识点
+
+1.所有协程启动的时候，都会有一次 `Continuation.resumeWith` 的操作，这一次操作对于调度器来说就是一次调度的机会，我们的协程有机会调度到其他线程的关键之处就在于此。
+
+ 2.`delay` 是挂起点，`delay`操作后可能会切换线程，在 JVM 上 `delay` 实际上是在一个 `ScheduledExcecutor` 里面添加了一个延时任务，因此会发生线程切换。
+

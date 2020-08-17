@@ -26,6 +26,7 @@ class MainActivity : AppCompatActivity() {
             Item("2-withContext", Demo2Activity::class.java),
             Item("3-suspendCancellableCoroutine", Demo3Activity::class.java),
             Item("4-coroutineScope", Demo4Activity::class.java),
+            Item("8-协程上下文", Demo8Activity::class.java),
             Item("25.Coroutine-协程取消", Coroutine_Cancel_Example::class.java)
         )
         recyclerView.adapter = object : RecyclerView.Adapter<ViewHolder>() {

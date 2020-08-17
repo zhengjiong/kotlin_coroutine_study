@@ -50,8 +50,10 @@ suspend fun main() {
 
 
 class MyContinuationInterceptor : ContinuationInterceptor {
+    companion object Key : CoroutineContext.Key<ContinuationInterceptor>
+
     override val key: CoroutineContext.Key<*>
-        get() = ContinuationInterceptor.Key
+        get() = Key
 
     override fun <T> interceptContinuation(continuation: Continuation<T>): Continuation<T> {
         log("MyContinuationInterceptor interceptContinuation")
