@@ -29,6 +29,7 @@
         <activity android:name=".Demo4Activity" />
         <activity android:name=".Demo8Activity" />
         <activity android:name=".Coroutine_Cancel_Example" />
+        <activity android:name=".Merge" />
     </application>
 
 </manifest>
