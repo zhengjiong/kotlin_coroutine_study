@@ -82,7 +82,7 @@ class Merge : AppCompatActivity() {
                             try {
                                 //这里就算是使用了supervisorScope, 也会被下面withContext的异常所取消,
                                 //所以这里的supervisorScope根本没有用!!!
-                                //因为withContext的异常会去掉launch, launch又是这里的父协程
+                                //因为withContext的异常会取消掉supervisorScope, supervisorScope又是这里launch的父协程
                                 //父协程取消了,子协程肯定会被取消, 想不被取消看下方btn3
                                 supervisorScope {
                                     println(coroutineContext[Job.Key])
@@ -97,11 +97,11 @@ class Merge : AppCompatActivity() {
 
 
 
-                        withContext(Dispatchers.Default) {
+                        //withContext(Dispatchers.Default) {
                             println(coroutineContext[Job.Key])
                             delay(1000)
                             throw KotlinNullPointerException()
-                        }
+                        //}
                     }
                 } catch (e: Exception) {
                     println(e)
@@ -109,7 +109,7 @@ class Merge : AppCompatActivity() {
             }
         }
 
-        btn2.setOnClickListener {
+        /*btn2.setOnClickListener {
             lifecycleScope.launch {
                 try {
                     //这里用supervisorScope或者CoroutineScope均可以捕获到异常
@@ -118,9 +118,9 @@ class Merge : AppCompatActivity() {
                     supervisorScope {
                         println(coroutineContext[Job.Key])
 
-                        //方法1:launch想要不被下面的异常所取消, 可以在这里使用SupervisorJob
-                        //方法2看下面btn4
-                        launch(SupervisorJob()) {
+                        //方法1:launch想要不被下面的异常所取消, 可以在这里使用Job或者SupervisorJob
+                        //因为这样就是单独的一个作用域,不受父协程控制
+                        launch(Job()) {
                             try {
                                 println(coroutineContext[Job.Key])
                                 delay(3000)
@@ -132,21 +132,21 @@ class Merge : AppCompatActivity() {
                             }
                         }
 
+                        println("withContext")
 
-
-                        withContext(Dispatchers.Default) {
+                        //withContext(Dispatchers.Default) {
                             println(coroutineContext[Job.Key])
                             delay(1000)
                             throw KotlinNullPointerException()
-                        }
+                        //}
                     }
                 } catch (e: Exception) {
                     println(e)
                 }
             }
-        }
+        }*/
 
-        btn2.setOnClickListener {
+        /*btn2.setOnClickListener {
             lifecycleScope.launch {
                 try {
                     //这里用supervisorScope或者CoroutineScope均可以捕获到异常
@@ -155,8 +155,8 @@ class Merge : AppCompatActivity() {
                     supervisorScope {
                         println(coroutineContext[Job.Key])
 
-                        //方法2:这里使用supervisorScope, 内部的协程不会收到外面的异常所影响
-                        supervisorScope {
+                        //这里没有测试意义, withContext会在coroutineScope内部的launch执行完成后才执行
+                        coroutineScope {
                             launch(Dispatchers.IO) {
                                 try {
                                     println(coroutineContext[Job.Key])
@@ -169,7 +169,7 @@ class Merge : AppCompatActivity() {
                                 }
                             }
                         }
-
+                        println("withContext")
                         withContext(Dispatchers.Default) {
                             println(coroutineContext[Job.Key])
                             delay(1000)
@@ -180,6 +180,6 @@ class Merge : AppCompatActivity() {
                     println(e)
                 }
             }
-        }
+        }*/
     }
 }

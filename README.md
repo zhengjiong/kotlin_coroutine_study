@@ -425,7 +425,7 @@ public fun MainScope(): CoroutineScope = ContextScope(SupervisorJob() + Dispatch
 使用 `SupervisorJob` 时，一个子协程运行失败不会影响到其他子协程。`SupervisorJob` 不会取消它和它自己的子级，也不会传播异常并传递给它的父级，它会让子协程自己处理异常。
 
 - coroutineScope 是继承外部 Job 的上下文创建作用域，在其内部的取消操作是双向传播的，子协程未捕获的异常也会向上传递给父协程。它更适合一系列对等的协程并发的完成一项工作，任何一个子协程异常退出，那么整体都将退出，简单来说就是”一损俱损“。这也是协程内部再启动子协程的默认作用域。
-- supervisorScope 同样继承外部作用域的上下文，但其内部的取消操作是单向传播的，父协程向子协程传播，反过来则不然，这意味着子协程出了异常并不会影响父协程以及其他兄弟协程。它更适合一些独立不相干的任务，任何一个任务出问题，并不会影响其他任务的工作，简单来说就是”自作自受“，例如 UI，我点击一个按钮出了异常，其实并不会影响手机状态栏的刷新。需要注意的是，supervisorScope 内部启动的子协程内部再启动子协程，如无明确指出，则遵守默认作用域规则，也即 supervisorScope 只作用域其直接子协程。
+- supervisorScope 同样继承外部作用域的上下文，但其内部的取消操作是单向传播的，父协程向子协程传播，反过来则不然，这意味着子协程出了异常并不会影响父协程以及其他兄弟协程。它更适合一些独立不相干的任务，任何一个任务出问题，并不会影响其他任务的工作，简单来说就是”自作自受“，例如 UI，我点击一个按钮出了异常，其实并不会影响手机状态栏的刷新。**需要注意的是，supervisorScope 内部启动的子协程内部再启动子协程，如无明确指出，则遵守默认作用域规则，也即 supervisorScope 只作用域其直接子协程。**
 
 **未被捕获的异常一定会被抛出，无论您使用的是哪种 Job**
 
@@ -598,6 +598,86 @@ fun test4(){
 ```
 
 
+
+```kotlin
+lifecycleScope.launch {
+    try {
+        //这里用supervisorScope或者CoroutineScope均可以捕获到异常
+        //因为withContext并不会开启一个新的协程,所以它被取消后均可以在外层catch到
+        //受影响的只是里面的launch启动的协程
+        supervisorScope {
+            println(coroutineContext[Job.Key])
+
+            launch {
+                try {
+                    //这里就算是使用了supervisorScope, 也会被下面withContext的异常所取消,
+                    //所以这里的supervisorScope根本没有用!!!
+                    //因为withContext的异常会取消掉supervisorScope, supervisorScope又是这里launch的父协程
+                    //父协程取消了,子协程肯定会被取消, 想不被取消看下面例子
+                    supervisorScope {
+                        println(coroutineContext[Job.Key])
+                        delay(3000)
+                        println("delay-end")
+                    }
+                } catch (e: Exception) {
+										//会打印出取消异常信息
+                    // JobCancellationException: Parent job is Cancelling; 										job=ScopeCoroutine{Cancelling}@9d362ed
+                    println(e)
+                }
+            }
+
+
+						//这里用withContext和不用,结果都是一样, 因为withContext不会启动一个新协程
+            //withContext(Dispatchers.Default) {
+                println(coroutineContext[Job.Key])
+                delay(1000)
+                throw KotlinNullPointerException()
+            //}
+        }
+    } catch (e: Exception) {
+        println(e)
+      	//KotlinNullPointerException
+    }
+}
+```
+
+```kotlin
+lifecycleScope.launch {
+    try {
+        //这里用supervisorScope或者CoroutineScope均可以捕获到异常
+        //因为withContext并不会开启一个新的协程,所以它被取消后均可以在外层catch到
+        //受影响的只是里面的launch启动的协程
+        supervisorScope {
+            println(coroutineContext[Job.Key])
+
+            //方法1:launch想要不被下面的异常所取消, 可以在这里使用Job或者SupervisorJob
+            //因为这样就是单独的一个作用域,不受父协程控制
+            launch(Job()) {
+                try {
+                    println(coroutineContext[Job.Key])
+                    delay(3000)
+                    //3000ms后 delay-end会顺利输出
+                    println("delay-end")
+                } catch (e: Exception) {
+                    //这里不会输出异常
+                    println(e)
+                }
+            }
+
+            println("withContext")
+						//这里用withContext和不用,结果都是一样, 因为withContext不会启动一个新协程
+            //withContext(Dispatchers.Default) {
+                println(coroutineContext[Job.Key])
+                delay(1000)
+                throw KotlinNullPointerException()
+            //}
+        }
+    } catch (e: Exception) {
+        println(e)
+      	//KotlinNullPointerException
+    }
+}
+```
 
 ### Launch
 
