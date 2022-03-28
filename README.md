@@ -1,10 +1,10 @@
 # 协程知识点总结
 
-## 1.CoroutineContext(协程上下文、拦截器、调度器)
+## 一.CoroutineContext(协程上下文、拦截器、调度器)
 
 调度器和拦截器本质上就是一个协程上下文的实现。
 
-### 1.上下文
+### 1.1 上下文
 
 `launch` 函数有三个参数(上下文,启动模式,协程体)，第一个参数叫 **上下文**，它的接口类型是 `CoroutineContext`，通常我们见到的上下文的类型是 `CombinedContext` 或者 `EmptyCoroutineContext`，一个表示上下文的组合，另一个表示什么都没有。
 
@@ -50,7 +50,7 @@ GlobalScope.launch(CoroutineName("线程名-1") + Job() + Dispatchers.Default) {
 }
 ```
 
-### 2.拦截器
+### 1.2 拦截器
 
 拦截协程的方法也很简单，因为协程的本质就是回调 + “黑魔法”，而这个回调就是被拦截的 `Continuation` 。
 
@@ -83,7 +83,7 @@ fun test(){
 
 如果我们在拦截器当中自己处理了线程切换，那么就实现了自己的一个简单的调度器。
 
-### 3.调度器
+### 1.3 调度器
 
 ```kotlin
 public abstract class CoroutineDispatcher :
@@ -101,9 +101,9 @@ public actual val Main: MainCoroutineDispatcher get() = MainDispatcherLoader.dis
 public val IO: CoroutineDispatcher = DefaultScheduler.IO
 ```
 
-## 2.常用挂起函数(suspendCancellableCoroutine、withContext、coroutineScope、supervisorScope)
+## 二 常用挂起函数(suspendCancellableCoroutine、withContext、coroutineScope、supervisorScope)
 
-### 1.launch,async
+### 2.1 launch,async
 
 协程内部使用launch或者async函数会启动一个新的协程，并不是挂起函数，所以后面的代码还是会继续执行，"end"会在"2"之前打印出来, 除非使用join或者await
 
@@ -145,7 +145,7 @@ btn2.setOnClickListener {
 }
 ```
 
-### 2.withContext
+### 2.2 withContext
 
 不会创建新的协程，在指定协程上运行挂起代码块，并挂起该协程直至代码块运行完成。
 
@@ -175,7 +175,7 @@ btn1.setOnClickListener {
 
 
 
-### 3.suspendCoroutine和suspendCancellableCoroutine
+### 2.3 suspendCoroutine和suspendCancellableCoroutine
 
 这两个方法是挂起函数，它并不是帮我们启动协程的，它运行在协程当中并且帮我们获取到当前协程的 Continuation 实例，也就是拿到回调，方便后面我们调用它的 resume 或者 resumeWithException 来返回结果或者抛出异常。如果你重复调用 resume 或者 resumeWithException 会出现异常IllegalStateException.
 
@@ -201,7 +201,7 @@ fun getUser(callBack: Callback) {
 
 ```
 
-### 4.coroutineScope和supervisorScope
+### 2.4 coroutineScope和supervisorScope
 
 为了做到结构化并发并避免泄漏的情况发生想要创建多个协程，可以在 suspend function 中使用名为 coroutineScope 或 supervisorScope 这样的构造器来启动多个协程，可以安全地从 suspend 函数中启动协程。
 
@@ -228,13 +228,13 @@ btn2.setOnClickListener {
 }
 ```
 
-### 5.使用区别
+### 2.5 使用区别
 
-#### 1.相同点
+#### 2.5.1 相同点
 
 suspendCancellableCoroutine、withContext、coroutineScope、supervisorScope的相同点是，他们都是挂起函数，都可以有返回值。
 
-#### 2.不同点
+#### 2.5.2 不同点
 
 `withContext`可以用来切换线程，但是不能封装回调api，而`suspendCancellableCoroutine`是用来封装回调api，使用`resume` 或者 `resumeWithException` 来返回结果或者抛出异常，只是不能切换线程，但是可以在内部启动线程来切换线程，还有一个重要区别是传给它的block参数并不是一个挂起函数，只是个普通函数（适合用来封装回调api），而传递给`withContext`和`coroutineScope`的block参数都是挂起函数，所以`suspendCancellableCoroutine`的block内部不能使用`delay`这类挂起函数，而`withContext`和`coroutineScope`可以使用delay等挂起函数。`suspendCancellableCoroutine`还具有一个`invokeOnCancellation`来监听协程是否取消。
 
@@ -307,7 +307,7 @@ lifecycleScope.launch {
 
 
 
-#### 3.使用场景
+#### 2.5.3 使用场景
 
 在非挂起函数需要封装成协程来使用的时候，比如okhttp等网络请求，view的事件回调等可以使用suspendCancellableCoroutine，
 
@@ -334,7 +334,7 @@ public suspend fun <R> coroutineScope(
 ): R
 ```
 
-#### 4.具体用例
+#### 2.5.4 具体用例
 
 ##### 1.等待 View 布局完成后，获取布局大小
 
