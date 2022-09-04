@@ -156,6 +156,7 @@ class HelloCoroutine4 {
      */
     fun test4() {
         runBlocking {
+            async {  }
             /**
              * 这里不使用GlobalScope.launch,直接使用runBlocking的CoroutineScope,才能实现让runBlocking不结束!
              * 外部协程（runBlocking）直到在其作用域中启动的所有协程都执行完毕后才会结束。

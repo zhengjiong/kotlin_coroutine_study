@@ -27,9 +27,17 @@ class MainActivity : AppCompatActivity() {
             Item("3-suspendCancellableCoroutine", Demo3Activity::class.java),
             Item("4-coroutineScope", Demo4Activity::class.java),
             Item("8-协程上下文", Demo8Activity::class.java),
+            Item("9-runblocking", Demo9Activity::class.java),
             Item("10-异常处理", Demo10Activity::class.java),
-            Item("25.Coroutine-协程取消", Coroutine_Cancel_Example::class.java),
-            Item("merge", Merge::class.java)
+            Item("11-异常处理-2", Demo11Activity::class.java),
+            Item("14-异常处理-3", Demo14Activity::class.java),
+            Item("25-Coroutine-协程取消", Coroutine_Cancel_Example::class.java),
+            Item("66-热流", Demo66Activity::class.java),
+            Item("77-repeatOnLifecycle", Demo77Activity::class.java),
+            Item("88-callbackFlow", Demo88Activity::class.java),
+            Item("99-merge", Demo99Activity::class.java),
+            Item("109-背压", Demo109Activity::class.java),
+            Item("119-StateFlow  ShareFlow", Demo119Activity::class.java)
         )
         recyclerView.adapter = object : RecyclerView.Adapter<ViewHolder>() {
             override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {

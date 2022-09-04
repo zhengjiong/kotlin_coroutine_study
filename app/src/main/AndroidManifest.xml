@@ -16,7 +16,8 @@
                 android:name="org.apache.http.legacy"
                 android:required="false" />
 
-        <activity android:name=".MainActivity">
+        <activity android:name=".MainActivity"
+                android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -28,9 +29,17 @@
         <activity android:name=".Demo3Activity" />
         <activity android:name=".Demo4Activity" />
         <activity android:name=".Demo8Activity" />
+        <activity android:name=".Demo9Activity" />
         <activity android:name=".Demo10Activity" />
+        <activity android:name=".Demo11Activity" />
+        <activity android:name=".Demo14Activity" />
         <activity android:name=".Coroutine_Cancel_Example" />
-        <activity android:name=".Merge" />
+        <activity android:name=".Demo99Activity" />
+        <activity android:name=".Demo66Activity" />
+        <activity android:name=".Demo77Activity" />
+        <activity android:name=".Demo88Activity" />
+        <activity android:name=".Demo109Activity" />
+        <activity android:name=".Demo119Activity" />
     </application>
 
 </manifest>

@@ -14,7 +14,11 @@ fun main() {
 //    demo.test2()
     //demo.test3()
 //    demo.test4()
-    demo.test5()
+    //demo.test5()
+    //demo.test6()
+    //demo.test7()
+    //demo.test8()
+    demo.test9()
     System.`in`.read()
 }
 
@@ -52,7 +56,7 @@ class Demo10 {
         KotlinNullPointerException
         2
      */
-    fun test2(){
+    fun test2() {
         supervisorScope.launch {
             //child 1
             println("1")
@@ -103,7 +107,7 @@ class Demo10 {
         1
         KotlinNullPointerException
      */
-    fun test4(){
+    fun test4() {
         jobScope.launch(SupervisorJob()) {
             launch {
                 // child1
@@ -126,13 +130,135 @@ class Demo10 {
         1
         kotlin.KotlinNullPointerException
      */
-    fun test5(){
+    fun test5() {
         jobScope.launch {
             try {
                 println(1)
                 throw KotlinNullPointerException()
             } catch (e: Exception) {
                 println(e)
+            }
+        }
+    }
+
+    /**
+     * 1
+    2
+    Exception in thread "main" java.lang.ArithmeticException: / by zero
+    at com.zj.kotlin.jvm.google.Demo10$test6$1$1$1.invokeSuspend(10.Coroutine-异常处理.kt:149)
+    at kotlin.coroutines.jvm.internal.BaseContinuationImpl.resumeWith(ContinuationImpl.kt:33)
+    at kotlinx.coroutines.DispatchedTask.run(Dispatched.kt:241)
+    at kotlinx.coroutines.EventLoopImplBase.processNextEvent(EventLoop.common.kt:270)
+    at kotlinx.coroutines.BlockingCoroutine.joinBlocking(Builders.kt:79)
+    at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking(Builders.kt:54)
+    at kotlinx.coroutines.BuildersKt.runBlocking(Unknown Source)
+    at kotlinx.coroutines.BuildersKt__BuildersKt.runBlocking$default(Builders.kt:36)
+    at kotlinx.coroutines.BuildersKt.runBlocking$default(Unknown Source)
+    at com.zj.kotlin.jvm.google.Demo10.test6(10.Coroutine-异常处理.kt:142)
+    at com.zj.kotlin.jvm.google._10_Coroutine_异常处理Kt.main(10.Coroutine-异常处理.kt:18)
+    at com.zj.kotlin.jvm.google._10_Coroutine_异常处理Kt.main(10.Coroutine-异常处理.kt)
+    3
+    4
+     */
+    fun test6() {
+        runBlocking {
+            println("1")
+            supervisorScope {
+                println("2")
+                //这里try不到
+                try {
+                    // 启动一个子协程
+                    launch {
+                        1 / 0 // 故意让子协程出现异常
+                    }
+                } catch (e: Exception) {
+                    println(e.message)
+                }
+                delay(100)
+                println("3")
+            }
+            println("4")
+        }
+    }
+
+    /**
+     * 1
+    2
+    error
+    Exception in thread "main" java.lang.ArithmeticException: / by zero
+    at com.zj.kotlin.jvm.google.Demo10$test7$1$1.invokeSuspend(10.Coroutine-异常处理.kt:197)
+     */
+    fun test7() {
+        runBlocking {
+            println("1")
+            supervisorScope {
+                println("2")
+                // 启动一个子协程
+                launch {
+                    try {
+                        delay(1000)
+                        println("3")
+                    } catch (e: Exception) {
+                        println("error")
+                    }
+                }
+                delay(100)
+                1 / 0 //父协程报错
+                println("3")
+            }
+        }
+    }
+
+    /**
+     * 1
+       2
+       e->/ by zero
+     */
+    fun test8() {
+        runBlocking {
+            println("1")
+            try {
+                //可以try到, 如果换成supervisorScope就try不到
+                coroutineScope {
+                    println("2")
+                    // 启动一个子协程
+                    launch {
+                        1 / 0 // 故意让子协程出现异常
+                    }
+                    delay(100)
+                    println("3")
+                }
+            } catch (e: Exception) {
+                println("e->" + e.message)
+            }
+        }
+    }
+
+    /**
+    1
+    2
+
+    Exception in thread "main" java.lang.ArithmeticException: / by zero
+    at com.zj.kotlin.jvm.google.Demo10$test9$1$1$1.invokeSuspend(10.Coroutine-异常处理.kt:246)
+
+    3
+     */
+    fun test9() {
+        runBlocking {
+            println("1")
+            try {
+                //try不到
+                supervisorScope {
+                    println("2")
+                    // 启动一个子协程
+                    launch {
+                        1 / 0 // 故意让子协程出现异常
+                    }
+                    delay(100)
+                    println("3")
+                }
+            } catch (e: Exception) {
+                println("e->" + e.message)
             }
         }
     }

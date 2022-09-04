@@ -11,7 +11,7 @@ import kotlinx.coroutines.*
  * date: 2020/8/27 21:27
  */
 
-class Merge : AppCompatActivity() {
+class Demo99Activity : AppCompatActivity() {
     val jobScope = CoroutineScope(Job())
     val supervisorScope = CoroutineScope(SupervisorJob())
     val mainScope = MainScope()
