@@ -37,9 +37,11 @@
         <activity android:name=".Demo99Activity" />
         <activity android:name=".Demo66Activity" />
         <activity android:name=".Demo77Activity" />
+        <activity android:name=".Demo78Activity" />
         <activity android:name=".Demo88Activity" />
         <activity android:name=".Demo109Activity" />
         <activity android:name=".Demo119Activity" />
+        <activity android:name=".EmptyActivity" />
     </application>
 
 </manifest>

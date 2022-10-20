@@ -11,8 +11,9 @@ import kotlinx.coroutines.flow.*
 import kotlin.concurrent.thread
 
 /**
+ * conflate 如果值的生产速度大于值的消耗速度，就忽略掉中间未来得及处理的值，只处理最新的值。
  * collectLatest和collect区别
- * 区别1：当emit执行之后，collect会执行，但上游并没有挂起(collectLatest)，而是继续在emit之后执行
+ * 区别1：collectLatest当emit执行之后，collect会执行，但上游并没有挂起(collectLatest)，而是继续在emit之后执行
  * 区别2：当有新的值被emit，下游collectLatest没有被执行完会被cancel取消
  * 区别3：collectLatest不会挂起上下游线程,上游继续emit,下游一样可以收到,但是上游继续发送的话,下游如果被挂起就会被取消
  *
@@ -229,6 +230,7 @@ class Demo109Activity : AppCompatActivity() {
 //        System.out: 16:09:57:458 [Thread[main,5,main]]->客人吃完A
 //        System.out: 16:09:57:463 [Thread[main,5,main]]->客人收到C
 //        System.out: 16:10:00:472 [Thread[main,5,main]]->客人吃完C
+        //如果值的生产速度大于值的消耗速度，就忽略掉中间未来得及处理的值，只处理最新的值。
         //conflate不会影响collect执行，但是缓冲区有多个值的时候只会把最新的那个给collect。
         //A在delay的时候,后面又发送了B和C,这个时候collect正在delay中,conflate并不会取消A和B,会把最新的值给collect,
         //因为A在delay,所以A会输出,然后B不是最新所以跳过,最后输出C
@@ -299,6 +301,88 @@ class Demo109Activity : AppCompatActivity() {
                     delay(1500)
                     log("客人吃完$it")
                 }
+            }
+        }
+
+//        System.out: flatMapLatest 2
+//        System.out: flatMapLatest 3
+//        System.out: flatMapLatest 4
+        //flatMapLatest：与 collectLatest 操作符类似
+        binding.button11.setOnClickListener {
+            lifecycleScope.launch {
+                flow {
+                    emit("1")
+                    emit("2")
+                    delay(1000)
+                    emit("3")
+                    delay(1000)
+                    emit("4")
+                }.flatMapLatest { value ->
+                    flow<String> {
+                        delay(200)
+                        println("flatMapLatest $value")
+                    }
+                }.collect()
+            }
+        }
+
+//        I/System.out: collectLatest 2
+//        I/System.out: collectLatest 3
+//        I/System.out: collectLatest 4
+        //flatMapLatest：与 collectLatest 操作符类似
+        binding.button12.setOnClickListener {
+            lifecycleScope.launch {
+                flow {
+                    emit("1")
+                    emit("2")
+                    delay(1000)
+                    emit("3")
+                    delay(1000)
+                    emit("4")
+                }.collectLatest {
+                    delay(200)
+                    println("collectLatest $it")
+                }
+            }
+        }
+
+        //4
+        //flatMapLatest：与 collectLatest 操作符类似
+        binding.button13.setOnClickListener {
+            lifecycleScope.launch {
+                flow {
+                    emit("1")
+                    delay(50)
+                    emit("2")
+                    delay(50)
+                    emit("3")
+                    delay(50)
+                    emit("4")
+                }.collectLatest {
+                    delay(500)
+                    println("collectLatest $it")
+                }
+            }
+        }
+
+        //4
+        //flatMapLatest：与 collectLatest 操作符类似
+        binding.button14.setOnClickListener {
+            lifecycleScope.launch {
+                flow {
+                    emit("1")
+                    delay(50)
+                    emit("2")
+                    delay(50)
+                    emit("3")
+                    delay(50)
+                    emit("4")
+                }.flatMapLatest {
+                    flow<String> {
+                        delay(500)
+                        println("collectLatest $it")
+                    }
+                }.collect()
             }
         }
     }

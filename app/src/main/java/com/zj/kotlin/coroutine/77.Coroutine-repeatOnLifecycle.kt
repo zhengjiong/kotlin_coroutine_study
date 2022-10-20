@@ -1,5 +1,6 @@
 package com.zj.kotlin.coroutine
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.databinding.DataBindingUtil
@@ -25,28 +26,30 @@ class Demo77Activity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         val binding: ActivityDemo77Binding =
             DataBindingUtil.setContentView(this, R.layout.activity_demo77)
-
+        binding.btnStart.setOnClickListener {
+            startActivity(Intent(this, EmptyActivity::class.java))
+        }
         binding.button1.setOnClickListener {
             /**
              * launchWhenResumed会把后面的方法当做参数传到一个队列中去,只有当生命周期处于Resumed的时候
              * 执行该Block(Runnable),当activity处于stop后会暂停该线程
              */
-            //切到后台后能停止while循环
+            //切到后台后,或者启动另外一个activity后能停止while循环
             lifecycleScope.launchWhenResumed {
                 var i = 1
                 while (true) {
-                    delay(500)
+                    delay(3000)
                     println("1  launchWhenResumed ----> $i   currentState=${lifecycle.currentState}  ${Thread.currentThread()}")
                     i++
                 }
             }
 
-            //切到后台后不会停止while循环
+            //切到后台,或者启动另外一个activity后不会停止while循环
             lifecycleScope.launchWhenResumed {
                 thread {
                     var i = 1
                     while (true) {
-                        Thread.sleep(1500)
+                        Thread.sleep(3000)
                         println("2  launchWhenResumed ----> $i   currentState=${lifecycle.currentState}  ${Thread.currentThread()}")
                         i++
                     }
@@ -54,48 +57,48 @@ class Demo77Activity : AppCompatActivity() {
 
             }
 
-            //切到后台后不会停止while循环
+            //切到后台,或者启动另外一个activity后不会停止while循环
             lifecycleScope.launchWhenResumed {
                 launch(Dispatchers.Default) {
                     var i = 1
                     while (true) {
-                        delay(1500)
+                        delay(3000)
                         println("3  launchWhenResumed ----> $i   currentState=${lifecycle.currentState}  ${Thread.currentThread()}")
                         i++
                     }
                 }
             }
 
-            //切到后台后能停止while循环
+            //切到后台,或者启动另外一个activity后能停止while循环
             lifecycleScope.launchWhenResumed {
                 launch {
                     var i = 1
                     while (true) {
-                        delay(1500)
+                        delay(3000)
                         println("4  launchWhenResumed ----> $i   currentState=${lifecycle.currentState}  ${Thread.currentThread()}")
                         i++
                     }
                 }
             }
 
-            //切到后台后不会停止while循环
+            //切到后台,或者启动另外一个activity后不会停止while循环
             lifecycleScope.launchWhenResumed {
                 withContext(Dispatchers.Default) {
                     var i = 1
                     while (true) {
-                        delay(1500)
+                        delay(3000)
                         println("5  launchWhenResumed ----> $i   currentState=${lifecycle.currentState}  ${Thread.currentThread()}")
                         i++
                     }
                 }
             }
 
-            //切到后台后能停止while循环
+            //切到后台,或者启动另外一个activity后能停止while循环
             lifecycleScope.launchWhenResumed {
                 async {
                     var i = 1
                     while (true) {
-                        delay(1500)
+                        delay(3000)
                         println("6  launchWhenResumed ----> $i   currentState=${lifecycle.currentState}  ${Thread.currentThread()}")
                         i++
                     }
@@ -107,7 +110,7 @@ class Demo77Activity : AppCompatActivity() {
                 async(Dispatchers.Main) {
                     var i = 1
                     while (true) {
-                        delay(1500)
+                        delay(3000)
                         println("7  launchWhenResumed ----> $i   currentState=${lifecycle.currentState}  ${Thread.currentThread()}")
                         i++
                     }
@@ -125,7 +128,7 @@ class Demo77Activity : AppCompatActivity() {
                  * 内部会创建一个LifecycleEventObserver,并且会执行addObserver, 加入到Activity
                  * 的LifecycleRegistry中,activity声明周期变化后,会执行这里设置的对应的方法:(Lifecycle.State.STARTED)
                  */
-                repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
                     var i = 1
                     while (true) {
                         delay(500)
@@ -200,6 +203,7 @@ class Demo77Activity : AppCompatActivity() {
             /**
              * 如果只需从一个数据流中进行收集，则可使用 flowWithLifecycle 来收集数据，它能够在生命周期进入目标
              * 状态时发送数据，并在离开目标状态时取消内部的生产者
+             * flowWithLifeCycle内部也是调用了repeatOnLifecycle
              */
             val flow = flow<Int> {
                 repeat(10) {

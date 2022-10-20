@@ -82,6 +82,11 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="button8" />
-
+        <Button
+                android:id="@+id/btn_start"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textAllCaps="false"
+                android:text="start activity" />
     </com.google.android.flexbox.FlexboxLayout>
 </layout>
