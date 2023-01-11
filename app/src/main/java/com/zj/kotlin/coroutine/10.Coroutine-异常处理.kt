@@ -208,6 +208,7 @@ class Demo10Activity : AppCompatActivity() {
         //输出:
         //1
         btn8.setOnClickListener {
+            //这里就算改成supervisorScope, 运行结果也一样
             jobScope.launch {
                 try {
                     //这里如果改成jobScope.async{}, 异常就会被正确捕获,app不会crash
@@ -357,26 +358,29 @@ class Demo10Activity : AppCompatActivity() {
         }
 
 
-        //app不会crash
-        //异常被正确捕获
+        //app crash
+        //异常不能被正确捕获
         //输出:
         //1
         //KotlinNullPointerException
+        //crashs
         btn14.setOnClickListener {
             jobScope.launch {
-                supervisorScope {
-                    val deferred = async {
+                //supervisorScope {
+                    //外面套了supervisorScope, async不会第一时间抛出异常而是等到await的时候
+                    //外面套了coroutineScope, async还是会第一时间抛出异常
+                    //async使用SupervisorJob()来启动, async不会第一时间抛出异常而是等到await的时候
+                    val deferred = async(SupervisorJob()) {
                         println("1")
                         delay(500)
                         throw KotlinNullPointerException()
-
                     }
-                    try {
+                    /*try {
                         deferred.await()
                     } catch (e: Exception) {
                         println(e)
-                    }
-                }
+                    }*/
+                //}
             }
         }
 
@@ -384,7 +388,8 @@ class Demo10Activity : AppCompatActivity() {
         //异常不能被捕获
         //输出:
         //1
-        btn14.setOnClickListener {
+        btn15.setOnClickListener {
+            //supervisorScope.launch { 这样也不能捕获,照样crash,只有async根协程的方式启动才可以,或者是外面套scope的方式(上面btn10或btn11)
             jobScope.launch(SupervisorJob()) {
                 try {
                     val deferred = async {
