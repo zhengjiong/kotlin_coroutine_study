@@ -39,7 +39,8 @@ class MainActivity : AppCompatActivity() {
             Item("99-merge", Demo99Activity::class.java),
             Item("109-背压", Demo109Activity::class.java),
             Item("119-StateFlow  ShareFlow", Demo119Activity::class.java),
-            Item("130-Sample用法", Demo130Activity::class.java)
+            Item("130-Sample用法", Demo130Activity::class.java),
+            Item("150-stateIn用法", Demo150Activity::class.java)
         )
         recyclerView.adapter = object : RecyclerView.Adapter<ViewHolder>() {
             override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {

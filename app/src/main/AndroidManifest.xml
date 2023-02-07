@@ -42,6 +42,7 @@
         <activity android:name=".Demo109Activity" />
         <activity android:name=".Demo119Activity" />
         <activity android:name=".Demo130Activity" />
+        <activity android:name=".Demo150Activity" />
         <activity android:name=".EmptyActivity" />
     </application>
 
