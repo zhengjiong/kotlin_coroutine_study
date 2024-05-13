@@ -35,6 +35,7 @@ suspend fun main() {
     job.join()
 
     /**
+     * 重要
      * 这里有两种结果:
      * 21:38:08:073 [main] 4
      * 21:25:20:573 [DefaultDispatcher-worker-2] 4

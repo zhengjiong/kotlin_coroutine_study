@@ -10,15 +10,15 @@ import kotlinx.coroutines.*
 
 fun main() {
     val demo = Demo10()
-    //demo.test1()
+//    demo.test1()
 //    demo.test2()
-    //demo.test3()
+//    demo.test3()
 //    demo.test4()
     //demo.test5()
-    //demo.test6()
-    //demo.test7()
+//    demo.test6()
+    demo.test7()
     //demo.test8()
-    demo.test9()
+    //demo.test9()
     System.`in`.read()
 }
 
@@ -49,7 +49,7 @@ class Demo10 {
     }
 
     /*
-        如果 Child 1 失败了，无论是 scope 还是 Child 2 都会被取消。
+        如果 Child 1 失败了，Child 2 不会被取消。
 
         输出:
         1
@@ -163,6 +163,7 @@ class Demo10 {
     fun test6() {
         runBlocking {
             println("1")
+            //换成coroutineScope这里就可以try到, 但是下面的3不会输出
             supervisorScope {
                 println("2")
                 //这里try不到
@@ -181,6 +182,39 @@ class Demo10 {
         }
     }
 
+    /*
+    输出:
+        1
+        2
+        exception
+        4
+     */
+    fun test6_1() {
+        runBlocking {
+            println("1")
+            //换成coroutineScope这里就可以try到, 但是下面的3不会输出
+            try {
+                coroutineScope {
+                    println("2")
+                    //这里try不到
+                    try {
+                        // 启动一个子协程
+                        launch {
+                            1 / 0 // 故意让子协程出现异常
+                        }
+                    } catch (e: Exception) {
+                        println(e.message)
+                    }
+                    delay(100)
+                    println("3")
+                }
+            } catch (e: Exception) {
+                TODO("Not yet implemented")
+            }
+            println("4")
+        }
+    }
+
     /**
      * 1
     2
@@ -189,7 +223,9 @@ class Demo10 {
     at com.zj.kotlin.jvm.google.Demo10$test7$1$1.invokeSuspend(10.Coroutine-异常处理.kt:197)
      */
     fun test7() {
-        runBlocking {
+        runBlocking(CoroutineExceptionHandler { coroutineContext, throwable ->
+            println("throwable->"+throwable)
+        }) {
             println("1")
             supervisorScope {
                 println("2")
@@ -199,12 +235,13 @@ class Demo10 {
                         delay(1000)
                         println("3")
                     } catch (e: Exception) {
+                        //这里会输出
                         println("error")
                     }
                 }
                 delay(100)
                 1 / 0 //父协程报错
-                println("3")
+                println("4")
             }
         }
     }

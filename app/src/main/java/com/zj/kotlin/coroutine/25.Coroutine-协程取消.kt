@@ -29,7 +29,6 @@ class Coroutine_Cancel_Example : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_coroutine_cancel)
 
-
         /*
         2019-08-12 22:27:36.443 14581-14581/com.zj.kotlin.coroutine I/System.out: 22:27:36:441 [main] onclick start
         2019-08-12 22:27:36.494 14581-14581/com.zj.kotlin.coroutine I/System.out: 22:27:36:494 [main] onclick end

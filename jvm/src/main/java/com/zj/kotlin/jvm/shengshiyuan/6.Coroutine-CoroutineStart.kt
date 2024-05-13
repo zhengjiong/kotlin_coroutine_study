@@ -174,6 +174,7 @@ class HelloCoroutine6 {
      * todo
      * 这里很奇怪暂时不明白为什么end也是在DefaultDispatcher的线程中执行, 如果test6不用suspend改为runBlock{}就没有该问题!
      * Thread[DefaultDispatcher-worker-1,5,main] -> end
+     * 结论:因为test6()本身也再协程中运行, delay之后因为UNDISPATCHED导致执行协程的线程发生改变了,后面没有再改变所以会沿用之前的线程来执行
      */
     suspend fun test6() {
         val job = GlobalScope.launch(start = CoroutineStart.UNDISPATCHED) {

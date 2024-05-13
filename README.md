@@ -398,6 +398,73 @@ btn2.setOnClickListener {
 }
 ```
 
+#### 2.5.5 CallbackFlow(2024-05-13 21:36:28新增)
+
+Callback Flow 是为了与基于回调的 API 一起工作而设计的 Kotlin 的 Flow API 的扩展。它允许你将基于回调的数据转换为一个 Flow，该 Flow 表示异步数据流，并带有一个基于回调的 API。
+
+可以使用它来创建一个 Flow，该 Flow 可以随着回调的触发而接收多个值。这个 Flow 会保持活动，直到它被明确地取消或完成。
+
+在内部，callbackFlow 使用了一个通道，这在概念上非常类似于阻塞队列。awaitClose 在底层使用了 suspendCancellableCoroutine。
+
+处理多次发射的回调：callbackFlow 对于处理多次发射的回调特别有用，这些异步操作会随着时间的推移发射多个结果。例如，你可能在处理 Android 中的位置更新时使用它。
+
+```
+val locationListener = object : LocationListener {
+    override fun onLocationUpdate(location: Location) {
+           
+    }
+}
+
+LocationManager.registerForLocation(locationListener)
+LocationManager.unregisterForLocation(locationListener)
+
+fun getLocationUpdates(): Flow<Location> {
+    return callbackFlow {
+        val locationListener = object : LocationListener {
+            override fun onLocationUpdate(location: Location) {
+                trySend(location)
+            }
+        }
+        LocationManager.registerForLocation(locationListener)
+        //协程被关闭的时候会调用。
+        awaitClose {
+            LocationManager.unregisterForLocation(locationListener)
+        }
+    }
+}
+
+launch {
+    getLocationFlow()
+    .collect { location ->
+           
+    }
+}
+```
+
+##### callbackFlow优点：
+
+-  **结构化的异步代码**：callbackFlow 允许你将基于回调的 API 转换为结构化的 Flow，使你的代码更可读和可维护。它避免了回调地狱，并简化了错误处理。
+-  **取消处理**：当不再需要 Flow 时，它会自动处理取消，确保资源被正确释放。这减少了你的 Android 应用中资源泄露的风险。
+-  **并发数据处理**：Coroutines 和 Flows 与 callbackFlow 无缝工作，使你能够并发处理数据，并处理多个异步操作，并行操作，而无需嵌套回调的复杂性。
+-  **与其他协程特性的集成**：callbackFlow 很好地与其他协程特性集成，如挂起函数，async 和 await，允许你构建复杂的异步工作流。
+
+##### callbackFlow缺点：
+
+-  **复杂性**：CallbackFlow 可能会给你的代码引入复杂性，特别是当你必须管理多个回调和流发射时。这可能使代码更难阅读和维护。
+-  **调试**：使用 callbackFlow 调试异步代码可能更具挑战性，因为它可能不会提供像结构化并发的 async/await 那样清晰的堆栈跟踪。
+
+##### suspendCancellableCoroutine 的优点：
+
+-  **细粒度控制**：可以完全控制协程的生命周期，包括取消。这允许你在协程被取消时清理资源并执行自定义操作。
+-  **与基于回调的 API 的集成**：对于需要处理回调但想要提供更结构化和协程友好接口的现有异步基于回调的 API，它非常有用。
+-  **自定义错误处理**：可以定义如何在协程内部处理错误，使得在协程内部管理和传播异常变得更加容易。
+
+##### suspendCancellableCoroutine的缺点：
+
+-  **复杂性**：使用带有回调的 suspendCancellableCoroutine 可能比像 async、launch 或 withContext 这样的更高级别的抽象更复杂和容易出错。你需要手动管理协程的生命周期、取消和错误处理。
+-  **不适合大多数用例**：对于大多数用例，使用像 async、launch 或 callbackFlow 这样的更高级别的构造更直接，也更不容易出错。suspendCancellableCoroutine 通常保留用于低级操作或没有更好替代方案的情况。
+-  **需要小心处理**：在使用 suspendCancellableCoroutine 时，必须小心确保正确地处理取消和异常，因为不恰当的使用可能导致资源泄漏或意外行为。
+
 ## 3.CoroutineScope(协程作用域)
 
 1.创建一个CoroutineScope协程作用域需要传入一个CoroutineContext
@@ -937,4 +1004,145 @@ btn7.setOnClickListener {
 1.所有协程启动的时候，都会有一次 `Continuation.resumeWith` 的操作，这一次操作对于调度器来说就是一次调度的机会，我们的协程有机会调度到其他线程的关键之处就在于此。
 
  2.`delay` 是挂起点，`delay`操作后可能会切换线程，在 JVM 上 `delay` 实际上是在一个 `ScheduledExcecutor` 里面添加了一个延时任务，因此会发生线程切换。
+
+
+
+## 6.协程的去抖动、节流、重试选项
+
+### debounce 去抖动
+
+![图片](https://mmbiz.qpic.cn/sz_mmbiz_jpg/7G6wAxO5rWDNJgFR0rcFksn4NiaUMDIRRB5icsAHqh9l7YyxLTakjgibNv1jHs2hia1AZian4oqxQS02e1MN3mMHT7A/640?wx_fmt=other&from=appmsg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+
+对函数进行去抖动意味着所有调用都将被忽略，直到它们停止一段时间。只有这样该函数才会被调用。例如，如果我们将计时器设置为 2 秒，并且该函数以 1 秒的间隔调用 10 次，则实际调用将在最后一次（第十次）调用该函数后仅 2 秒发生。
+
+该方法的本质是在接收到最后一个流值后会等待一定的时间间隔。如果在此期间收到新值，则间隔将重新开始。如果在等待间隔期间没有收到新值，则最后一个值将输出到最终线程。
+
+例如，如果使用一个线程在每次用户输入字符时更新电话查找，那么使用 debounce 方法，电话将不会随着每次更改而不断出现和消失。相反，在用户完成键入后，更新查找会延迟一定时间。
+
+假设我们的任务是处理用户在搜索字段中的输入，但只有在用户完成输入数据后才需要将数据发送到服务器。在这种情况下，可以使用 debounce 方法，仅在用户输入完成后才处理用户的输入。
+
+```
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+fun main() = runBlocking<Unit> {
+ val searchQuery = MutableStateFlow("")
+ 
+ // set a delay of 500 ms before each retrieved value
+ val result = searchQuery.debounce(500)
+ 
+ // subscribing to receive values from the result
+ result.collect { 
+   // send a request to the server only if the result of the search string is not empty
+   if (it.isNotBlank()) {
+     println("Request to server: $it")
+   } else {
+     println("The search string is empty")
+   }
+ }
+ 
+ // simulate user input in the search field
+ launch {
+ delay(0)
+ searchQuery.value = "a"
+ delay(100)
+ searchQuery.value = "ap"
+ delay(100)
+ searchQuery.value = "app"
+ delay(1000)
+ searchQuery.value = "apple"
+ delay(1000)
+ searchQuery.value = ""
+ }
+}
+```
+
+在此示例中，搜索字段由 MutableStateFlow 表示。去抖方法在检索每个值之前设置 0.5 秒的延迟。在最后一个线程中，仅当搜索字符串不为空时才会向服务器发出请求。
+
+执行此代码的结果将打印到控制台：
+
+Request to server: app
+Request to server: apple
+The search string is empty
+
+这意味着仅在用户在搜索字段中输入完数据后才向服务器发送请求。
+
+
+
+### Throttling 节流
+
+![图片](https://mmbiz.qpic.cn/sz_mmbiz_jpg/7G6wAxO5rWDNJgFR0rcFksn4NiaUMDIRRvy7mxbI6JFWQXRh19Lt3EH8Jiala1G9uTEXFmFZK46kz6aYkee0yLDQ/640?wx_fmt=other&from=appmsg&tp=webp&wxfrom=5&wx_lazy=1&wx_co=1)
+
+函数限制是指在指定时间段内调用该函数不超过一次（例如每 10 秒一次）。换句话说，如果某个函数最近已经被调用过，trattting 会阻止该函数被调用。 Trattting 还确保该函数定期执行。
+
+throttle 方法与 debounce 类似，因为它也用于控制线程内发送项目的频率。这些方法之间的区别在于它们如何处理接收到的值。与防抖不同的是，防抖会忽略除最后一个值之外的所有值，而节流阀会记住最后一个值，并在设置的时间间隔到期时重置计时器。如果没有出现新值，则将最后存储的值发送到输出流。
+
+因此，debounce 会忽略除最后一个值之外的所有值，并仅在经过一定时间后发送最后一个值，而不会收到新值。 Throttle 会记住最后一个值，并在每次一定时间间隔后发送它，无论该时间段内收到的值数量如何。
+
+两种方法都适用于不同的场景，方法的选择取决于所需的数据处理逻辑。
+
+### Retry 重试
+
+使用 Kotlin 协程，如果上次操作失败，可以在一段时间后轻松重试操作。为此，可以使用 retryWhen 函数，该函数允许确定应重复操作的频率和次数。
+
+retryWhen 函数应与标准 Kotlin 库“kotlinx.coroutines”中的 catch 语句结合使用。 catch 语句用于捕获操作期间可能发生的任何异常。
+
+但是，retryWhen 方法是作为 Flow 的扩展来实现的。要允许操作独立于流程执行一次，请考虑其自己的实现：
+
+```
+suspend fun loadResource(url: String): Resource {
+ // loadResource by url
+}
+
+suspend fun getResourceWithRetry(url: String, retries: Int, intervalMillis: Long): Resource {
+ return try {
+   loadResource(url)
+ } catch (e: Exception) {
+   if (retries > 0) {
+     delay(intervalMillis) // a delay for a certain period of time
+     getResourceWithRetry(url, retries - 1, intervalMillis) // repeat the operation after a certain period of time
+   } else {
+     throw e // throw an exception if retries are expired
+   }
+ }
+}
+
+// example of use
+CoroutineScope(Dispatchers.IO).launch {
+ val resource = getResourceWithRetry("http://example.com/resource", 3, 1000)
+ // use of the loaded resource
+}
+```
+
+这里我们定义了一个 getResourceWithRetry 函数，它调用 loadResource 操作来加载给定 URL 处的资源。如果操作不成功，将使用延迟函数递归调用函数。
+
+尝试重复操作的次数由retries参数决定，重试之间的时间间隔由intervalMillis参数决定。
+
+为了处理异常，在 loadResource 函数调用周围使用 catch 语句。如果操作失败，会再次调用 getResourceWithRetry 函数，重试次数减少 1，并延迟 IntervalMillis 参数定义的时间间隔。
+
+这样，如果上次失败，可以使用 retryWhen 函数和 catch 运算符轻松地在一段时间后重新运行该操作。
+
+所提出的算法有两个缺点：它执行一个固定操作（访问网络中的特定地址）并且以恒定的间隔执行。第一个问题可以通过使用模板方法来解决，该方法允许用必要的操作来代替可能失败的代码调用。第二个问题可以通过稍微复杂地计算尝试之间的间隔来解决（这尤其重要，例如，在访问远程服务器时 - 如果许多客户端以相同的间隔重复尝试，则存在增加服务器上的负载达到临界水平）。
+
+因此，我们有一个更灵活的选择：
+
+```
+suspend fun <T> getResourceWithRetry(
+ retries: Int = 5, // 5 retries
+ initialDelay: Long = 100L, // 0.1 second
+ maxDelay: Long = 128000L, // 128 seconds
+ factor: Double = 2.0,
+ block: suspend () -> T): T
+{
+ return try {
+   loadResource(url)
+ } catch (e: Exception) {
+   if (retries > 0) {
+     val currentDelay = (currentDelay * factor).toLong().coerceAtMost(maxDelay)
+     delay(currentDelay) // delay for a certain period of time
+     getResourceWithRetry(retries - 1, currentDelay, maxDelay, factor, block) // repeat the operation after some time
+   } else {
+     throw e // throw an exception if retries are over
+   }
+}
+```
 

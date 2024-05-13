@@ -159,7 +159,8 @@ class Demo10Activity : AppCompatActivity() {
             //所以这里要用jobScope.launch来启动一个协程体
             jobScope.launch {
                 //注意这里是使用jobScope.async,而不是直接async, 所以async是作为根协程被启动, 内部的异常会在await的时候被抛出
-                //当async被用作构建根协程（由协程作用域直接管理的协程）时，异常不会主动抛出，而是在调用.await()时抛出。
+                //当async被用作构建根协程(jobScope.async)（由协程作用域直接管理的协程）时，异常不会主动抛出，而是在调用.await()时抛出。
+                //如果这里直接用async启动, 不管下面执不执行await, 这里都会抛出异常切下面无法捕捉到导致程序崩溃
                 val deferred1 = jobScope.async {
                     println("1")
                     delay(500)
@@ -199,7 +200,8 @@ class Demo10Activity : AppCompatActivity() {
         }
 
 
-        //todo:这里不是太理解, 后面补充
+        //todo:这里不是太理解, 后面补充(2024-05-13 22:07:04已经理解,会crash的原因是使用了
+        // async会导致异常被立即抛出所有外部的scope也出现异常)
         //注意这里异常会被捕获, 但是app还是会crash
         //app crash
         //由于 scope 的直接子协程是 launch，如果 async 中产生了一个异常，这个异常将会被立即抛出。
@@ -207,11 +209,14 @@ class Demo10Activity : AppCompatActivity() {
         //这会让异常被立即抛出。
         //输出:
         //1
+        //然后crash
         btn8.setOnClickListener {
             //这里就算改成supervisorScope, 运行结果也一样
             jobScope.launch {
                 try {
+                    //这里外面套一层coroutineScope也可以让其捕捉到
                     //这里如果改成jobScope.async{}, 异常就会被正确捕获,app不会crash
+                    //下面无法捕捉到
                     val deferred = async {
                         println("1")
                         delay(500)
@@ -273,7 +278,6 @@ class Demo10Activity : AppCompatActivity() {
             jobScope.launch {
                 try {
                     coroutineScope {
-                        //这里如果改成jobScope.async{}, 异常就会被正确捕获,app不会crash
                         val deferred = async<Unit> {
                             println("1")
                             delay(500)
@@ -298,14 +302,12 @@ class Demo10Activity : AppCompatActivity() {
             jobScope.launch {
                 try {
                     supervisorScope {
-                        //这里如果改成jobScope.async{}, 异常就会被正确捕获,app不会crash
                         val deferred = async<Unit> {
                             println("1")
                             delay(500)
                             throw KotlinNullPointerException()
                         }
 
-                        //这里不执行await也会导致抛出异常,且不被捕获
                         deferred.await()
                     }
                 } catch (e: Exception) {
