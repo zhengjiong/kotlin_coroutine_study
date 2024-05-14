@@ -1,6 +1,6 @@
 # 协程知识点总结
 
-## 一.CoroutineContext(协程上下文、拦截器、调度器)
+## 1.CoroutineContext(协程上下文、拦截器、调度器)
 
 调度器和拦截器本质上就是一个协程上下文的实现。
 
@@ -101,7 +101,7 @@ public actual val Main: MainCoroutineDispatcher get() = MainDispatcherLoader.dis
 public val IO: CoroutineDispatcher = DefaultScheduler.IO
 ```
 
-## 二 常用挂起函数(suspendCancellableCoroutine、withContext、coroutineScope、supervisorScope)
+## 2. 常用挂起函数(suspendCancellableCoroutine、withContext、coroutineScope、supervisorScope)
 
 ### 2.1 launch,async
 
@@ -810,6 +810,11 @@ jobScope.launch {
 
 ### Async
 
+1. 外面套了supervisorScope, async不会第一时间抛出异常而是等到await的时候
+2. 外面套了coroutineScope, async还是会第一时间抛出异常
+3. async使用SupervisorJob()来启动, async不会第一时间抛出异常而是等到await的时候
+4. async作为根协程来启动, async不会第一时间抛出异常而是等到await的时候
+
 当 async 被用作根协程 (CoroutineScope 实例或 supervisorScope 的直接子协程) 时**不会自动抛出异常，而是在调用 .await() 时才会抛出异常。**为了捕获其中抛出的异常，用 try/catch 包裹调用 .await() 
 
 ```kotlin
@@ -1146,3 +1151,55 @@ suspend fun <T> getResourceWithRetry(
 }
 ```
 
+
+
+## 7.repeatOnLifecycle和launchWhenResumed的区别
+
+1. launchWhenResumed只是挂起和恢复, 当生命周期小于Resumed的时候比如
+   stoped(实际上不是小于,需要分析源码,Resumed对应的取消事件是ON_PAUSE, 当
+   接收到ON_PAUSE的时候取消该协程)的时候挂起该线程,然后当回到Resumed的时候重
+   新执行该协程,类似线程中的wait和notify
+2. repeatOnLifecycle会在当前生命周期大于等于RESUMED的时候执行里面的方法,
+   然后小于该生命周期后cancel掉该协程Job
+
+
+
+## 8.在使用 Kotlin 协程时应该注意的事情
+
+### 1.使用 coroutineScope 包装异步调用或使用 SupervisorJob 处理异常
+
+❌ 如果异步块可能抛出异常，请不要依赖于用 try/catch 块包装它:
+
+```
+val job: Job = Job()
+val scope = CoroutineScope(Dispatchers.Default + job)
+// may throw Exception
+fun doWork(): Deferred<String> = scope.async { 抛出异常 }   // (1)
+fun loadData() = scope.launch {
+    try {
+        doWork().await()                               // (2)
+    } catch (e: Exception) { ... }
+}
+```
+
+在上面的示例中，doWork 函数启动新的协程 (1)，这可能会引发未处理的异常。如果您尝试使用 try/catch 块 包装 doWork(2) ，它仍然会导致scope启动的其他协程被取消。
+
+发生这种情况是因为非SupervisorJob的情况下任何子协程的失败都会导致其父协程立即失败。
+
+✅ 避免崩溃的一种方法是使用 SupervisorJob(1):
+
+**协程的失败或取消不会导致主协程失败，也不会影响其其他子协程。**
+
+```
+val job = SupervisorJob()                               // (1)
+val scope = CoroutineScope(Dispatchers.Default + job)
+
+// may throw Exception
+fun doWork(): Deferred<String> = scope.async { ... }
+
+fun loadData() = scope.launch {
+    try {
+        doWork().await()
+    } catch (e: Exception) { ... }
+}
+```

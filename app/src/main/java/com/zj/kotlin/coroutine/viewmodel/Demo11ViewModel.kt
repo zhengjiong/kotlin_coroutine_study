@@ -523,7 +523,6 @@ class Demo11ViewModel : ViewModel() {
      */
     fun test11_2() {
         viewModelScope.launch {
-            //这里必须使用supervisorScope
             coroutineScope {
                 //当async被用作构建根协程（由协程作用域直接管理的协程）时，异常不会主动抛出，而是在调用.await()时抛出。
                 val deferred = supervisorScopeTest.async {
@@ -650,7 +649,7 @@ class Demo11ViewModel : ViewModel() {
 
     }
 
-    //会crash,exceptionHandler无法捕获被作为跟协程启动的async
+    //会crash
     fun test13() {
         viewModelScope.launch {
             /**

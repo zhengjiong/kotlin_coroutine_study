@@ -9,6 +9,11 @@ import kotlin.coroutines.CoroutineContext
 
 /**
  *
+ * //外面套了supervisorScope, async不会第一时间抛出异常而是等到await的时候
+ * //外面套了coroutineScope, async还是会第一时间抛出异常
+ * //async使用SupervisorJob()来启动, async不会第一时间抛出异常而是等到await的时候
+ * //async作为根协程来启动, async不会第一时间抛出异常而是等到await的时候
+ *
  * CreateTime:2020/8/17 13:29
  * @author zhengjiong
  */
@@ -323,6 +328,8 @@ class Demo10Activity : AppCompatActivity() {
         btn12.setOnClickListener {
             jobScope.launch {
                 try {
+                    //去掉这个SupervisorJob()就会导致try不到, 然后crash,
+                    //这样写和jobScope.async的效果是一样的,都可以被try到
                     val deferred = async(SupervisorJob()) {
                         println("1")
                         delay(500)
@@ -365,13 +372,14 @@ class Demo10Activity : AppCompatActivity() {
         //输出:
         //1
         //KotlinNullPointerException
-        //crashs
+        //crash
         btn14.setOnClickListener {
             jobScope.launch {
                 //supervisorScope {
                     //外面套了supervisorScope, async不会第一时间抛出异常而是等到await的时候
                     //外面套了coroutineScope, async还是会第一时间抛出异常
                     //async使用SupervisorJob()来启动, async不会第一时间抛出异常而是等到await的时候
+                    //async作为根协程来启动, async不会第一时间抛出异常而是等到await的时候
                     val deferred = async(SupervisorJob()) {
                         println("1")
                         delay(500)
@@ -407,7 +415,91 @@ class Demo10Activity : AppCompatActivity() {
                 }
             }
         }
+        /**
+         * 输出:
+         * loadData
+         * launch start
+         * async
+         * e->java.lang.NullPointerException: null
+         */
+        btn16.setOnClickListener {
+            println("loadData")
+            val job: Job = Job()
+            val scope = CoroutineScope(Dispatchers.Default + job+ CoroutineExceptionHandler { coroutineContext, throwable ->
+                println("0 launch handle $throwable")
+            })
+            // may throw Exception
+            fun doWork(): Deferred<String> = scope.async {
+                println("async")
+                if (true) {
+                    throw NullPointerException("null")
+                }
+                "aaaa"
+            }   // (1)
+            fun loadData() = scope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                //下面可以try到, 就不会进入这里了
+                println("1 launch handle $throwable")
+            }) {
+                try {
+                    //这里虽然可以try到,但是没有使用superviseScope会导致scope启动的其他协程被取消掉
+                    doWork().await()   // (2)
+                } catch (e: Exception) {
+                    println("e->$e")
+                }
+            }
+            loadData()
+            scope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                //被取消后接收不到异常信息
+                println("2 launch handle $throwable")
+            }) {
+                println("launch start")
+                delay(1000)
+                //end不会输出, 因为没有使用superviseScope, doWork中的异常会导致scope启动的其他协程被取消掉
+                println("launch end")
+            }
+        }
+
+        /**
+         * loadData
+         * async
+         * e->java.lang.NullPointerException: null
+         * launch start
+         * launch end
+         */
+        btn17.setOnClickListener {
+            println("loadData")
+            // may throw Exception
+            fun doWork(): Deferred<String> = lifecycleScope.async {
+                println("async")
+                if (true) {
+                    throw NullPointerException("null")
+                }
+                "aaaa"
+            }   // (1)
+            fun loadData() = lifecycleScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                //下面可以try到, 就不会进入这里了
+                println("1 launch handle $throwable")
+            }) {
+                try {
+                    //这里虽然可以try到,但是没有使用superviseScope会导致scope启动的其他协程被取消掉
+                    doWork().await()   // (2)
+                } catch (e: Exception) {
+                    println("e->$e")
+                }
+            }
+            loadData()
+            lifecycleScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                //被取消后接收不到异常信息
+                println("2 launch handle $throwable")
+            }) {
+                println("launch start")
+                delay(1000)
+                //end会输出, 因为使用superviseScope, doWork中的异常不会导致scope启动的其他协程被取消掉
+                println("launch end")
+            }
+        }
     }
+
 
 
     /**
