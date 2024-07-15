@@ -340,30 +340,56 @@ class Demo119Activity : AppCompatActivity() {
         val backgroundScope= CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineName("zhengjiong"))
         val stateFlow1 = MutableStateFlow(false)
         val stateFlow2 = MutableStateFlow(false)
+        /**
+         * stateFlow1中使用trycatch捕获异常, 之后的stateFlow1和stateFlow2均可继续接收消息
+         */
         binding.button15.setOnClickListener {
             backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
                 println("button15  throwable  ${throwable}")
             }) {
-                supervisorScope {
-                    launch {
+                launch {
+                    stateFlow1.collectLatest {
                         try {
-                            stateFlow1.collectLatest {
-                                println("button15  stateFlow1   collectLatest  $it")
-                                if (it) {
-                                    throw NullPointerException()
-                                }
+                            println("button15  stateFlow1   collectLatest  $it")
+                            if (it) {
+                                throw NullPointerException()
                             }
                         } catch (e: Exception) {
                             println("button15  stateFlow1   catch  $e")
                         }
                     }
+                }
 
-                    launch {
-                        stateFlow2.collectLatest {
-                            println("button15  stateFlow2   collectLatest  $it")
-                        }
-
+                launch {
+                    stateFlow2.collectLatest {
+                        println("button15  stateFlow2   collectLatest  $it")
                     }
+
+                }
+            }
+        }
+
+        /**
+         * stateFlow1抛出异常后, 之后的stateFlow1和stateFlow2都无法再接收消息
+         */
+        binding.button18.setOnClickListener {
+            backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                println("button18  throwable  ${throwable}")
+            }) {
+                launch {
+                    stateFlow1.collectLatest {
+                        println("button18  stateFlow1   collectLatest  $it")
+                        if (it) {
+                            throw NullPointerException()
+                        }
+                    }
+                }
+
+                launch {
+                    stateFlow2.collectLatest {
+                        println("button18  stateFlow2   collectLatest  $it")
+                    }
+
                 }
             }
         }

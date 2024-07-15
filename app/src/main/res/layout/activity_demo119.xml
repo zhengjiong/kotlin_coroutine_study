@@ -107,7 +107,7 @@
             android:id="@+id/button15"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="button15" />
+            android:text="button15-collectLatest" />
         <Button
             android:id="@+id/button16"
             android:layout_width="wrap_content"
@@ -118,5 +118,10 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="button17" />
+        <Button
+            android:id="@+id/button18"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="button18-collectLatest" />
     </com.google.android.flexbox.FlexboxLayout>
 </layout>
