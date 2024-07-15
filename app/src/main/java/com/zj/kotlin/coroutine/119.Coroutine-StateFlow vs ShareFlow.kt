@@ -7,11 +7,27 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import com.zj.kotlin.coroutine.databinding.ActivityDemo119Binding
+import kotlinx.coroutines.CoroutineExceptionHandler
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 
 /**
  *
@@ -35,6 +51,15 @@ import kotlinx.coroutines.launch
 
 8.SharedFlow和StateFlow 执行tryEmit或者emit都不会等到collect收集后再继续执行(sharedFlow设置为
 BufferOverflow.DROP_OLDEST不会挂起, 设置为BufferOverflow.suspend会挂起),而是直接继续执行后面的操作
+
+9.
+MutableSharedFlow<Int>(replay = 0,extraBufferCapacity = 0,onBufferOverflow = BufferOverflow.SUSPEND)
+参数含义：
+replay：新订阅者订阅时，重新发送多少个之前已发出的值给新订阅者（类似粘性数据）；
+extraBufferCapacity：除了 replay 外，缓存的值数量，当缓存空间还有值时，emit 不会 suspend（emit 过快，collect 过慢，emit 的数据将被缓存起来）；
+onBufferOverflow：指定缓存区中已存满要发送的数据项时的处理策略（缓存区大小由 replay 和 extraBufferCapacity 共同决定）。默认值为 BufferOverflow.SUSPEND，还可以是 BufferOverflow.DROP_LATEST 或 BufferOverflow.DROP_OLDEST（顾名思义）。
+
+
  *
  *
  * CreateTime:2022/7/24 11:50
@@ -113,7 +138,7 @@ class Demo119Activity : AppCompatActivity() {
 
             }
 
-            //会丢失第一个,因为emit的时候这里还没collect
+
             lifecycleScope.launch {
                 mutableShareFlow3.collect{
                     log("button3 share -> $it")
@@ -125,12 +150,16 @@ class Demo119Activity : AppCompatActivity() {
             }.launchIn(lifecycleScope)
         }
 
+
+        /**
+         * 会全部输出,不会丢失数据
+         */
         val mutableShareFlow4= MutableSharedFlow<String>(0, 10, BufferOverflow.SUSPEND)
         binding.button4.setOnClickListener {
             lifecycleScope.launch{
                 delay(3000)
                 repeat(1000){
-                    //这里执行tryemit或者emit都不会等到collect收集后再继续执行,而是直接继续执行后面的操作
+                    //执行到第10个的时候, emit会挂起,因为buffer只有10个, 然后下方collect之后这里会继续发送
                     val result = mutableShareFlow4.emit(it.toString())
                     //Shareflow没有value属性只能调用emit方法
 
@@ -139,7 +168,7 @@ class Demo119Activity : AppCompatActivity() {
 
             }
 
-            //会丢失第一个,因为emit的时候这里还没collect
+
             lifecycleScope.launch {
                 mutableShareFlow4.collect{
                     log("button4 share -> $it")
@@ -148,6 +177,16 @@ class Demo119Activity : AppCompatActivity() {
             }
         }
 
+        /**
+         * button5 share -> init
+         * button5 share -> 0
+         * button5 emit  true  --> 0
+         * button5 emit  true  --> 1
+         * button5 emit  true  --> 2
+         * ......
+         * button5 emit  true  --> 999
+         * button5 share -> 999
+         */
         val mutableStateFlow5= MutableStateFlow<String>("init")
         binding.button5.setOnClickListener {
             lifecycleScope.launch{
@@ -161,7 +200,7 @@ class Demo119Activity : AppCompatActivity() {
 
             }
 
-            //会丢失第一个,因为emit的时候这里还没collect
+
             lifecycleScope.launch {
                 mutableStateFlow5.collect{
                     log("button5 share -> $it")
@@ -171,6 +210,12 @@ class Demo119Activity : AppCompatActivity() {
         }
 
 
+        /**
+         * repeat  0
+         * ......
+         * repeat  999
+         * button5 share -> 999
+         */
         val mutableStateFlow6 = MutableStateFlow("state init value")
         binding.button6.setOnClickListener {
             lifecycleScope.launch(Dispatchers.Default) {
@@ -221,7 +266,7 @@ class Demo119Activity : AppCompatActivity() {
 //        livedata一直观察着数据，即使activity不可见。
 
 //        运行代码，发现跳转到另外一个activity(原activity处于stop状态)，依然打印着日志。为了达到与livedata同样
-//        的生命周期效果，需要采用注释的那段代码。repeatOnLifecycle(Lifecycle.State.STARTED{}里的协程作用域会
+//        的生命周期效果，需要采用repeatOnLifecycle。repeatOnLifecycle(Lifecycle.State.STARTED{}里的协程作用域会
 //        检测到处于start状态就启动，检测到stop状态就取消。
             lifecycleScope.launch {
                 repeatOnLifecycle(Lifecycle.State.STARTED){
@@ -235,6 +280,104 @@ class Demo119Activity : AppCompatActivity() {
         }
         binding.button10.setOnClickListener {
             increaseCountNum()
+        }
+
+
+        //这里就算设置了SUSPEND, 如果没有消费者的话, 也会继续emit,不会被replay=10所限制大小
+        val mutableShareFlow11 = MutableSharedFlow<Int>(replay = 10, extraBufferCapacity = 0, onBufferOverflow = BufferOverflow.SUSPEND)
+        var cur = 1
+        binding.button11.setOnClickListener {
+            lifecycleScope.launch {
+                repeat(200) {
+                    delay(20)
+                    mutableShareFlow11.emit(cur)
+                    println("emit data: ${cur++}")
+                }
+            }
+        }
+
+        val flow12 = flow<Int> {
+            repeat(100) {
+                delay(20)
+                emit(cur)
+                println("flow12 emit data: ${cur++}")
+            }
+        }
+        /**
+         * started 有三种取值：
+         *
+         * Eagerly: 立即启动，到 scope 作用域被结束时停止
+         * Lazily: 当存在首个订阅者时启动，到 scope 作用域被结束时停止
+         * WhileSubscribed: 在没有订阅者的情况下取消订阅上游数据流，避免不必要的资源浪费
+         *
+         */
+        binding.button12.setOnClickListener {
+            //设置SharingStarted.Eagerly后, 上面的repeat方法会立即启动然后开始emit数据
+            flow12.shareIn(lifecycleScope, SharingStarted.Eagerly, 10)
+        }
+
+        val mutableStateFlow = MutableStateFlow<String?>(null)
+        binding.button13.setOnClickListener {
+            lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    mutableStateFlow.collectLatest {
+                        println("button13 collectLatest -> $it")
+                    }
+                }
+            }
+        }
+        val mutableSharedFlow = MutableSharedFlow<String?>()
+        binding.button14.setOnClickListener {
+            lifecycleScope.launch {
+                repeatOnLifecycle(Lifecycle.State.STARTED) {
+                    mutableSharedFlow.collectLatest {
+                        println("button14 collectLatest -> $it")
+                    }
+                }
+            }
+        }
+
+        val backgroundScope= CoroutineScope(SupervisorJob() + Dispatchers.IO + CoroutineName("zhengjiong"))
+        val stateFlow1 = MutableStateFlow(false)
+        val stateFlow2 = MutableStateFlow(false)
+        binding.button15.setOnClickListener {
+            backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                println("button15  throwable  ${throwable}")
+            }) {
+                supervisorScope {
+                    launch {
+                        try {
+                            stateFlow1.collectLatest {
+                                println("button15  stateFlow1   collectLatest  $it")
+                                if (it) {
+                                    throw NullPointerException()
+                                }
+                            }
+                        } catch (e: Exception) {
+                            println("button15  stateFlow1   catch  $e")
+                        }
+                    }
+
+                    launch {
+                        stateFlow2.collectLatest {
+                            println("button15  stateFlow2   collectLatest  $it")
+                        }
+
+                    }
+                }
+            }
+        }
+
+        binding.button16.setOnClickListener {
+            backgroundScope.launch {
+                stateFlow1.value = !stateFlow1.value
+            }
+        }
+
+        binding.button17.setOnClickListener {
+            backgroundScope.launch {
+                stateFlow2.value = !stateFlow2.value
+            }
         }
     }
 }

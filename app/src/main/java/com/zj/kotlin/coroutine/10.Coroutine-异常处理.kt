@@ -206,7 +206,7 @@ class Demo10Activity : AppCompatActivity() {
 
 
         //todo:这里不是太理解, 后面补充(2024-05-13 22:07:04已经理解,会crash的原因是使用了
-        // async会导致异常被立即抛出所有外部的scope也出现异常)
+        // async会导致异常被立即抛出所以外部的scope也出现异常)
         //注意这里异常会被捕获, 但是app还是会crash
         //app crash
         //由于 scope 的直接子协程是 launch，如果 async 中产生了一个异常，这个异常将会被立即抛出。
@@ -496,6 +496,44 @@ class Demo10Activity : AppCompatActivity() {
                 delay(1000)
                 //end会输出, 因为使用superviseScope, doWork中的异常不会导致scope启动的其他协程被取消掉
                 println("launch end")
+            }
+        }
+
+        /**
+         * e->java.lang.NullPointerException: null
+         * start
+         * end
+         * coroutineScope包一层async。现在，当 async 内部发生异常时，它将取消在此范围内创建
+         * 的所有其他协程，而不会触及外部范围。 (2)可以在异步块内处理异常。
+         */
+        btn18.setOnClickListener {
+            val job: Job = Job()
+            val scope = CoroutineScope(Dispatchers.Default + job+ CoroutineExceptionHandler { coroutineContext, throwable ->
+                println("0 launch handle $throwable")
+            })
+
+            //coroutineScope包一层
+            suspend fun doWork(): String = coroutineScope {// (1)
+                async {
+                    if (true) {
+                        throw NullPointerException("null")
+                    }
+                    "async"
+                }.await()
+            }
+
+            fun loadData() = scope.launch {// (2)
+                try {
+                    doWork()
+                } catch (e: Exception) {
+                    println("e->$e")
+                }
+            }
+            loadData()
+            scope.launch {
+                println("start")
+                delay(1000)
+                println("end")
             }
         }
     }

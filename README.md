@@ -870,7 +870,8 @@ todo:这里不是太理解, 后面补充
 由于 jobScope 的直接子协程是 launch，**async (CoroutineContext中Job继承父级) 会自动传播异常到它的父级 (launch)**，这会让异常被立即抛出(**注意这里异常会被捕获, 但是app还是会crash**)：
 
 ```kotlin
-//todo:这里不是太理解, 后面补充
+//todo:这里不是太理解, 后面补充(2024-05-13 22:07:04已经理解,会crash的原因是使用了
+//async会导致异常被立即抛出所以外部的scope也出现异常)
 //app crash
 //注意这里异常会被捕获, 但是app还是会crash
 //输出:
@@ -898,11 +899,11 @@ btn8.setOnClickListener {
 
 ```kotlin
 //todo:这里不是太理解, 后面补充
-//注意这里异常会被捕获, 但是app还是会crash
 //app不会crash
 //由于 scope 的直接子协程是 launch，如果 async 中产生了一个异常，这个异常将会被立即抛出。
 //原因是 async (包含一个 Job 在它的 CoroutineContext 中) 会自动传播异常到它的父级 (launch)，
 //这会让异常被立即抛出。
+//async非根协程启动,会立即抛出异常所以外层可以try到, 然后外层又会继续抛出,所以最外层又能try到第二次异常
 //输出:
 //1
 //1------>KotlinNullPointerException
@@ -912,7 +913,8 @@ btn9.setOnClickListener {
         try {
             coroutineScope {
                 try {
-                    //这里如果改成jobScope.async{}, 异常就会被正确捕获,app不会crash
+                    //这里如果改成jobScope.async{}, 异常就会被正确捕获
+                    //async非根协程启动,会立即抛出异常所以外层可以try到, 然后外层又会继续抛出,所以最外层又能try到第二次异常
                     val deferred = async {
                         println("1")
                         delay(500)
@@ -922,6 +924,7 @@ btn9.setOnClickListener {
                     //这里不执行await也会导致抛出异常,且不被捕获
                     deferred.await()
                 } catch (e: Exception) {
+                  //可以捕获,但是会传递异常到父协程
                     println("1------>$e")
                 }
             }
@@ -931,7 +934,7 @@ btn9.setOnClickListener {
     }
 }
 
-//todo:不太明白,以后补充
+
 //app不会crash
 //输出
 // 1
@@ -940,6 +943,7 @@ btn10.setOnClickListener {
   jobScope.launch {
     try {
       coroutineScope {
+        //async非根协程启动,会立即抛出异常所以外层可以try到
         //这里如果改成jobScope.async{}, 异常就会被正确捕获,app不会crash
         val deferred = async<Unit> {
           println("1")
@@ -956,7 +960,6 @@ btn10.setOnClickListener {
   }
 }
 
-//todo:不太明白,以后补充
 //app不会crash
 //输出
 // 1
@@ -966,6 +969,7 @@ btn11.setOnClickListener {
     try {
       supervisorScope {
         //这里如果改成jobScope.async{}, 异常就会被正确捕获,app不会crash
+        //async非根协程启动,会立即抛出异常所以外层可以try到
         val deferred = async<Unit> {
           println("1")
           delay(500)
@@ -1159,12 +1163,102 @@ suspend fun <T> getResourceWithRetry(
    stoped(实际上不是小于,需要分析源码,Resumed对应的取消事件是ON_PAUSE, 当
    接收到ON_PAUSE的时候取消该协程)的时候挂起该线程,然后当回到Resumed的时候重
    新执行该协程,类似线程中的wait和notify
-2. repeatOnLifecycle会在当前生命周期大于等于RESUMED的时候执行里面的方法,
+2. repeatOnLifecycle会在当前生命周期大于等于STARTED的时候执行里面的方法,
    然后小于该生命周期后cancel掉该协程Job
 
+```
+// 由于 repeatOnLifecycle 是一个挂起函数，
+// 因此要从 lifecycleScope 中创建新的协程
+lifecycleScope.launch {
+    // 直到 lifecycle 进入 DESTROYED 状态前都将当前协程挂起。
+    // repeatOnLifecycle 每当生命周期处于 STARTED 或以后的状态时会在新的协程中
+    // 启动执行代码块，并在生命周期进入 STOPPED 时取消协程。
+    repeatOnLifecycle(Lifecycle.State.STARTED) {
+        // 当生命周期处于 STARTED 时安全地从 locations 中获取数据
+        // 当生命周期进入 STOPPED 时停止收集数据
+        someLocationProvider.locations.collect {
+            // 新的位置！更新地图（信息）
+        }
+    }
+    // 注意：运行到此处时，生命周期已经处于 DESTROYED 状态！
+}
+```
 
 
-## 8.在使用 Kotlin 协程时应该注意的事情
+
+创建了一个方便的封装函数，名字叫作 launchAndCollectIn:
+
+```Kotlin
+Kotlin
+
+复制代码inline fun <T> Flow<T>.launchAndCollectIn(
+    owner: LifecycleOwner,
+    minActiveState: Lifecycle.State = Lifecycle.State.STARTED,
+    crossinline action: suspend CoroutineScope.(T) -> Unit
+) = owner.lifecycleScope.launch {
+        owner.repeatOnLifecycle(minActiveState) {
+            collect {
+                action(it)
+            }
+        }
+    }
+```
+
+你可以在 UI 代码中这样调用它:
+
+```Kotlin
+Kotlin
+
+复制代码class LocationActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+
+        someLocationProvider.locations.launchAndCollectIn(this, STARTED) {
+            // 新的位置！更新地图（信息）
+        }
+    }
+}
+```
+
+这个封装函数，虽然如同例子里那样看起来非常简洁和直接，但也存在同上文的 `LifecycleOwner.addRepeatingJob` API 一样的问题: 它不管调用的作用域，并且在用于其他协程内部时有潜在的危险。进一步说，原来的名字非常容易产生误导: collectIn 不是一个挂起函数！如前文提到的那样，开发者希望名字里带 collect 的函数能够挂起。或许，这个封装函数更好的名字是 Flow.launchAndCollectIn，这样就能避免误用了。
+
+
+
+
+
+## **8.**Flow.flowWithLifecycle
+
+若只需收集一个数据流，可以使用 `Flow.flowWithLifecycle` 操作符，其内部也是使用 `suspend Lifecycle.repeatOnLifecycle` 函数实现.
+
+`Flow.flowWithLifecycle` 操作符 (您可以参考 [具体实现](https://link.juejin.cn/?target=https%3A%2F%2Fcs.android.com%2Fandroidx%2Fplatform%2Fframeworks%2Fsupport%2F%2B%2Fandroidx-main%3Alifecycle%2Flifecycle-runtime-ktx%2Fsrc%2Fmain%2Fjava%2Fandroidx%2Flifecycle%2FFlowExt.kt%3Bl%3D87)) 是构建在 `repeatOnLifecycle` 之上的，并且仅当生命周期至少处于 `minActiveState` 时才会将来自上游数据流的内容发送出去。
+
+```
+lifecycleScope.launch {
+            someLocationProvider.locations
+                .flowWithLifecycle(lifecycle, STARTED)
+                .collect {
+                    // 新的位置！更新地图（信息）
+                }
+        }
+```
+
+```
+class LocationActivity : AppCompatActivity() {
+​    override fun onCreate(savedInstanceState: Bundle?) {
+​        super.onCreate(savedInstanceState)
+​        locationProvider.locationFlow()
+​            .flowWithLifecycle(this, Lifecycle.State.STARTED)
+​            .onEach {
+​                // 新的位置！更新地图
+​            }
+​            .launchIn(lifecycleScope) 
+​    }
+}
+```
+
+
+
+## 9.在使用 Kotlin 协程时应该注意的事情
 
 ### 1.使用 coroutineScope 包装异步调用或使用 SupervisorJob 处理异常
 
@@ -1184,7 +1278,7 @@ fun loadData() = scope.launch {
 
 在上面的示例中，doWork 函数启动新的协程 (1)，这可能会引发未处理的异常。如果您尝试使用 try/catch 块 包装 doWork(2) ，它仍然会导致scope启动的其他协程被取消。
 
-发生这种情况是因为非SupervisorJob的情况下任何子协程的失败都会导致其父协程立即失败。
+发生这种情况是因为**非SupervisorJob的情况下任何子协程的失败都会导致其父协程立即失败。**
 
 ✅ 避免崩溃的一种方法是使用 SupervisorJob(1):
 
@@ -1203,3 +1297,1161 @@ fun loadData() = scope.launch {
     } catch (e: Exception) { ... }
 }
 ```
+
+
+
+❌ 注意：只有当您使用 SupervisorJob 在根协程范围内运行async时，这才有效。因此，下面的代码仍然会使您的应用程序崩溃，因为async是在非根协程的范围内启动的。
+
+```
+val job = SupervisorJob()                               
+val scope = CoroutineScope(Dispatchers.Default + job)
+
+fun loadData() = scope.launch {
+    try {
+    		//async作为非根协程被启动时, 会自动传播异常到它的父级，这会让异常被立即抛出(注意这里异常会被捕获, 但是app还是会crash
+        async {                                         // (1)
+            // may throw Exception 
+        }.await()
+        //可以捕获,但是会传递异常到父协程
+    } catch (e: Exception) { ... }
+}
+```
+
+✅ 另一种避免崩溃的方法（这是更好的方法）是使用 coroutineScope包装 async。现在，当 async 内部发生异常时，它将取消在此范围内创建的所有其他协程，而不会触及外部范围。 (2)可以在异步块内处理异常。
+
+```
+val job = SupervisorJob()                               
+val scope = CoroutineScope(Dispatchers.Default + job)
+
+// may throw Exception
+suspend fun doWork(): String = coroutineScope {     // (1)
+    async { ... }.await()
+}
+
+fun loadData() = scope.launch {                       // (2)
+    try {
+        doWork()
+    } catch (e: Exception) { ... }
+}
+```
+
+
+
+### 2.避免使用不必要的 async/await
+
+❌如果您正在使用async，然后立即await，您应该停止这样做。
+
+```
+launch {
+    val data = async(Dispatchers.Default) { /* code */ }.await()
+}
+```
+
+✅ 如果你想切换协程上下文并立即挂起父协程，withContext 是更好的方法。
+
+```
+launch {
+    val data = withContext(Dispatchers.Default) { /* code */ }
+}
+```
+
+从性能角度来看，这并不是一个大问题（即使异步会创建新的协程来完成工作），但从语义上讲，异步意味着您想要在后台启动多个协程，然后才等待它们。
+
+**async适合多个任务并发操作, 如果只有一个的话适合使用withContext**
+
+
+
+### 3.避免取消范围作业
+
+❌ 如果你需要取消协程，首先不要取消作用域作业。
+
+```
+class WorkManager {
+    val job = SupervisorJob()
+    val scope = CoroutineScope(Dispatchers.Default + job)
+    
+    fun doWork1() {
+        scope.launch { /* do work */ }
+    }
+    
+    fun doWork2() {
+        scope.launch { /* do work */ }
+    }
+    
+    fun cancelAllWork() {
+        job.cancel()
+    }
+}
+
+fun main() {
+    val workManager = WorkManager()
+    
+    workManager.doWork1()
+    workManager.doWork2()
+    workManager.cancelAllWork()
+    workManager.doWork1() // (1)
+}
+```
+
+上述代码的问题在于，当我们取消作业时，我们将其置于已完成状态。在已完成作业范围内启动的协程将不会被执行 (1)。
+
+ ✅ 当你想取消特定作用域的所有协程时，可以使用cancelChildren函数。此外，提供取消个别作业的可能性也是一个很好的做法 (2)。
+
+```
+class WorkManager {
+    val job = SupervisorJob()
+    val scope = CoroutineScope(Dispatchers.Default + job)
+    
+    fun doWork1(): Job = scope.launch { /* do work */ } // (2)
+    
+    fun doWork2(): Job = scope.launch { /* do work */ } // (2)
+    
+    fun cancelAllWork() {
+        scope.coroutineContext.cancelChildren()         // (1)                             
+    }
+}
+fun main() {
+    val workManager = WorkManager()
+    
+    workManager.doWork1()
+    workManager.doWork2()
+    workManager.cancelAllWork()
+    workManager.doWork1()
+}
+```
+
+### 4.避免使用全局范围
+
+❌ 如果您在 Android 应用程序中到处使用 GlobalScope，您应该停止这样做。
+
+```
+GlobalScope.launch {
+    // code
+}
+```
+
+全局范围用于启动顶级协程，这些协程在整个应用程序生命周期内运行并且不会提前取消。
+
+应用程序代码通常应使用应用程序定义的 CoroutineScope，强烈建议不要在 GlobalScope 实例上使用 async 或 launch。
+
+✅ 在 Android 协程中，可以轻松地将范围限定为 Activity、Fragment、View 或 ViewModel 生命周期。
+
+```
+class MainActivity : AppCompatActivity(), CoroutineScope {
+    
+    private val job = SupervisorJob()
+    
+    override val coroutineContext: CoroutineContext
+        get() = Dispatchers.Main + job
+    
+    override fun onDestroy() {
+        super.onDestroy()
+        coroutineContext.cancelChildren()
+    }
+    
+    fun loadData() = launch {
+        // code
+    }
+}
+```
+
+
+
+
+
+## 10.SharedFlow  和  StateFlow
+
+### SharedFlow 的构造函数
+
+```Kotlin
+Kotlin
+
+复制代码public fun <T> MutableSharedFlow(
+    replay: Int = 0,
+    extraBufferCapacity: Int = 0,
+    onBufferOverflow: BufferOverflow = BufferOverflow.SUSPEND
+): MutableSharedFlow<T>
+```
+
+主要有三个参数：
+
+- replay: 新订阅者 collect 时，发送 replay 个历史数据给它，默认新订阅者不会获取以前的数据。
+- extraBufferCapacity: MutableSharedFlow 缓存的数据个数为 replay + extraBufferCapacity; 缓存一方面用于粘性事件的发送，另一方面也为了处理背压问题，既下游的消费者的消费速度低于上游生产者的生产速度时，数据会被放在缓存中。
+- onBufferOverflow: 背压处理策略，缓存区满后怎么处理(挂起或丢弃数据)，默认挂起。注意，当没有订阅者时，只有最近 replay 个数的数据会存入缓存区，不会触发 onBufferOverflow 策略。
+
+
+
+### StateFlow 的构造函数：
+
+```Kotlin
+Kotlin
+
+复制代码public fun <T> MutableStateFlow(value: T): MutableStateFlow<T>
+```
+
+构造函数只需传入一个初始值，它本质上是一个 replay = 1 且没有缓冲区的 SharedFlow, 因此在第一次订阅时会先获取到初始值。
+
+
+
+### StateFlow 与 LiveData区别
+
+共同点：
+
+- 都提供了 `可读写` 和 `只读` 两个版本。
+- 值唯一，会把最新值重现给订阅者，即粘性。
+- 可被多个订阅者订阅(共享数据流)。
+- 子线程中多次发送数据可能会丢失数据。
+
+不同点：
+
+- StateFlow 必须传入初始值，保证值的空安全，永远有值。
+- StateFlow 可以防抖，即多次传入相同值，不会有响应(Setting a value that is [equal][Any.equals] to the previous one does nothing) 。
+- 当 View 进入 STOPPED 状态时，`LiveData.observe()` 会停止接收数据，而从 StateFlow 或其他 Flow collect 数据的操作并不会自动停止。如需实现相同的行为，需要从 `Lifecycle.repeatOnLifecycle` 块 collect 数据流。
+
+ `StateFlow` 与 `LiveData` 有一些相同点：
+
+- 提供「可读可写」和「仅可读」两个版本（`StateFlow`，`MutableStateFlow`）
+- 它的值是唯一的
+- 它允许被多个观察者共用 （因此是共享的数据流）
+- 它永远只会把最新的值重现给订阅者，这与活跃观察者的数量是无关的
+- 支持 `DataBinding`
+
+它们也有些不同点：
+
+- StateFlow必须配置初始值
+
+- StateFlow value 空安全
+
+- StateFlow默认是防抖的，在更新数据时，会判断当前值与新值是否相同，如果相同则不更新数据。
+
+  
+
+`MutableStateFlow` 构造方法强制赋值一个非空的数据，而且 value 也是非空的。这意味着 `StateFlow` 永远有值
+
+> StateFlow 的 `emit()` 和 `tryEmit()` 方法内部实现是一样的，都是调用 `setValue()`
+
+
+
+### liveData转换成flow
+
+通过asFlow将liveData转换成flow, 然后使用flowWithLifecycle在生命周期中获取数据
+
+```
+lifecycleScope.launch {
+    //通过asFlow将liveData转换成flow, 然后使用flowWithLifecycle在生命周期中获取数据
+    liveData1.asFlow().flowWithLifecycle(this@Demo170Activity.lifecycle, Lifecycle.State.STARTED)
+        .collect{
+
+        }
+}
+```
+
+
+
+协程转换成livaData, 或者是使用Transformations.map转换的时候需要做耗时操作,可以使用liveData{}扩展函数
+
+```
+//使用liveData{}扩展函数,处理一些转换时需要的耗时操作
+
+val liveData1 = MutableLiveData<Int>()
+val transLiveData = Transformations.map(liveData1) {
+    //此处是在主线程中执行, 如果要做一些耗时操作,可以使用下面的liveData{}扩展函数
+    //....
+    it.toString()
+}
+
+
+val liveData = liveData<Int> {
+    //val data = doSuspendingFunction()//协程中处理
+    //emit(data)
+}
+```
+
+
+
+### LiveData迁移到StateFlow
+
+https://juejin.cn/post/7071059807456722974
+
+https://segmentfault.com/a/1190000040256135
+
+### StateFlow与ShareFlow主要区别:
+
+1. StateFlow 默认replay为1
+
+2. SharedFlow 没有起始值
+
+3. 状态（State）用 StateFlow ；事件（Event）用 SharedFlow  
+
+4. `StateFlow`始终是有值的且值是唯一的，创建时需要赋予初始值
+
+5. `StateFlow`永远只会把最新的值重现给订阅者，与活跃观察者数量无关
+
+6. 如果`StateFlow`重复赋予同一个值，只会回调一次
+
+7. `MutableSharedFlow` 发射值需要调用 `emit()/tryEmit()` 方法，**没有** `setValue()` 方法
+
+8. SharedFlow 可以传入一个 replay 参数，它表示可以对新订阅者重新发送 replay 个历史数据，默认值为 0, 即非粘性。
+
+9. StateFlow 可以看成是一个 replay = 1 且没有缓冲区的 SharedFlow 。
+
+10. SharedFlow 在子线程中多次 emit() 不会丢失数据, 可以保留历史数据
+
+11. MutableSharedFlow 发射值需要调用 emit()/tryEmit() 方法，没有 setValue() 方法
+
+12. 与 MutableSharedFlow 不同，MutableSharedFlow 构造器中是不能传入默认值的，这意味着 MutableSharedFlow 没有默认值。
+
+13. StateFlow 与 SharedFlow 还有一个区别是StateFlow只保留最新值，即新的订阅者只会获得最新的和之后的数据,而 `SharedFlow` 根据配置可以保留历史数据，新的订阅者可以获取之前发射过的一系列数据。
+
+14. StateFlow 默认是防抖的，在更新数据时，会判断当前值与新值是否相同，如果相同则不更新数据。
+
+15. SharedFlow和StateFlow 执行tryEmit或者emit都不会等到collect收集后再继续执行(sharedFlow设置为
+
+    BufferOverflow.DROP_OLDEST不会挂起, 设置为BufferOverflow.suspend会挂起),而是直接继续执行后面的操作
+
+16. MutableSharedFlow(replay = 0,extraBufferCapacity = 0,onBufferOverflow = BufferOverflow.SUSPEND)
+    参数含义：
+    `replay`：新订阅者订阅时，重新发送多少个之前已发出的值给新订阅者（类似粘性数据）；
+    `extraBufferCapacity`：除了 replay 外，缓存的值数量，当缓存空间还有值时，emit 不会 suspend（emit 过快，collect 过慢，emit 的数据将被缓存起来）；
+    `onBufferOverflow`：指定缓存区中已存满要发送的数据项时的处理策略（缓存区大小由 `replay` 和 `extraBufferCapacity` 共同决定）。默认值为 `BufferOverflow.SUSPEND`，还可以是 `BufferOverflow.DROP_LATEST` 或 BufferOverflow.DROP_OLDEST。
+
+17. `BufferOverflow 枚举类`：背压处理策略，缓存区满后怎么处理(挂起或丢弃数据)，默认挂起。 `SUSPEND` 表示发送或发送值的上游在缓存区已满时挂起，枚举值`DROP_OLDEST` 表示溢出时删除缓存区中最旧的值，将新值添加到缓存区，不要挂起，枚举值 `DROP_LATEST` 表示在缓存区溢出时删除当前添加到缓存区的最新值（以便缓存区内容保持不变），不要挂起；
+
+    
+
+### SharedFlow业务场景
+
+SharedFlow 实现的 EventBus 简单例子：
+
+```
+object EventBus {
+    private val events = ConcurrentHashMap<String, MutableSharedFlow<Event>>()
+
+    private fun getOrPutEventFlow(eventName: String): MutableSharedFlow<Event> {
+        return events[eventName] ?: MutableSharedFlow<Event>().also { events[eventName] = it }
+    }
+
+    fun getEventFlow(event: Class<Event>): SharedFlow<Event> {
+        return getOrPutEventFlow(event.simpleName).asSharedFlow()
+    }
+
+    suspend fun produceEvent(event: Event) {
+        val eventName = event::class.java.simpleName
+        getOrPutEventFlow(eventName).emit(event)
+    }
+
+    fun postEvent(event: Event, delay: Long = 0, scope: CoroutineScope = MainScope()) {
+        scope.launch {
+            delay(delay)
+            produceEvent(event)
+        }
+    }
+}
+
+@Keep
+open class Event(val value: Int) {}
+```
+
+事件发射和订阅：
+
+        lifecycleScope.launch {
+            EventBus.getEventFlow(Event::class.java).collect {
+                Log.e("Flow", "EventBus Collect: value=${it.value}")
+            }
+        }
+        EventBus.postEvent(Event(1), 0, lifecycleScope)
+        EventBus.postEvent(Event(2), 0)
+        
+    控制台输出结果：
+    Flow                    com.example.wangjaing                E  EventBus Collect: value=1
+    Flow                    com.example.wangjaing                E  EventBus Collect: value=2
+
+使用 SharedFlow 来做事件总线，有以下优点：
+
+1. 事件可以延迟发送
+2. 可以定义粘性事件
+3. 事件可以感知 Activity 或 Fragment 的生命周期
+4. 事件是有序的
+
+### SharedFlow总结
+
+在热流 SharedFlow 中，当它创建以后它就存在了，它可以在生产者 emit 数据时，没有消费者 collect 数据而独立运行。当生产者 emit 数据后，这些数据会被缓存下来，新老消费者都可以收到这些数据，从而达到共享数据。
+
+对于发射数据操作，会受到 MutableSharedFlow 构造方法参数 replay， extraBufferCapacity，onBufferOverflow 值的影响，这些参数会决定发射操作是挂起还是不挂起。发射的数据，将使用缓存数组进行管理，管理区域分为 buffered values 和 queued emitters。replay 和extraBufferCapacity 参数决定了buffered values 区域的大小，当 buffered values 区域存满溢出时，会根据溢出策略 onBufferOverflow 进行区域调整。当 replay=0 和 extraBufferCapacity=0 ，或 replay!=0 和 extraBufferCapacity!=0 且 buffered values 区域存满， 发射的数据将被包装成 Emitter 存储到 queued emitters 区域。另外，订阅者数量决定了发射数据是存储到缓存区还是丢弃。最后，缓存区存储的数据对所有订阅者共享。
+
+对于收集数据操作，使用 slots: Array<SharedFlowSlot?> 数组来管理订阅者，其中每一个 slot 对象对应一个订阅者，slot 对象的 slot.index 将订阅者要收集的数据与缓存区关联起来，slot.cont 将订阅者所在协程与 SharedFlow上下文关联起来。如果通过 slot.index 能在缓存区取到值，就直接将值给订阅者。否则就将订阅者封装成 Continuation 接口实现类对象存储到 slot.cont 中，挂起订阅者所在协程，等待缓存区有值时，再恢复订阅者协程并给它值。当订阅者协程不存活时，会释放订阅者关联的 slot 对象，也就是重置 slot.inext 和 slot.cont 的值，并重新调整缓存数组的位置。
+
+`tryEmit`会将发射的结果回调，并且如果缓冲区策略配置为suspend时会将这次数据的发射挂起，并将结果返回false，当缓冲区有空间时再进行发射。
+
+`emit` 当缓冲区没有空间时，该操作就会挂起
+
+
+
+### StateFlow业务场景
+
+在业务中可以用来做**状态更新**（替换 LiveData）。
+
+比如从服务端获取一个列表数据，并把列表数据展示到 UI。下面使用 `MVI (Model-View-Intent）`来做：
+
+Data Layer：
+
+```
+class FlowRepository private constructor() {
+
+    companion object {
+        @JvmStatic
+        fun newInstance(): FlowRepository = FlowRepository()
+    }
+
+    fun requestList(): Flow<List<ItemBean>> {
+        val call = ServiceGenerator
+            .createService(FlowListApi::class.java)
+            .getList()
+        return flow {
+            emit(call.execute())
+        }.flowOn(Dispatchers.IO).filter { it.isSuccessful }
+            .map {
+                it.body()?.data
+            }
+            .filterNotNull().catch {
+                emit(emptyList())
+            }.onEmpty {
+                emit(emptyList())
+            }
+    }
+}
+```
+
+ViewModel：
+
+```
+class ListViewModel : ViewModel() {
+
+    private val repository: FlowRepository = FlowRepository.newInstance()
+    
+    private val _uiIntent: Channel<FlowViewIntent> = Channel()
+    private val uiIntent: Flow<FlowViewIntent> = _uiIntent.receiveAsFlow()
+    
+    private val _uiState: MutableStateFlow<FlowViewState<List<ItemBean>>> =
+        MutableStateFlow(FlowViewState.Init())
+    val uiState: StateFlow<FlowViewState<List<ItemBean>>> = _uiState
+
+    fun sendUiIntent(intent: FlowViewIntent) {
+        viewModelScope.launch {
+            _uiIntent.send(intent)
+        }
+    }
+
+    init {
+        viewModelScope.launch {
+            uiIntent.collect {
+                handleIntent(it)
+            }
+        }
+    }
+
+    private fun handleIntent(intent: FlowViewIntent) {
+        viewModelScope.launch {
+            repository.requestList().collect {
+                if (it.isEmpty()) {
+                    _uiState.emit(FlowViewState.Failure(0, "data is invalid"))
+                } else {
+                    _uiState.emit(FlowViewState.Success(it))
+                }
+            }
+        }
+    }
+}
+
+
+data class FlowViewIntent()
+
+sealed class FlowViewState<T> {
+    @Keep
+    class Init<T> : FlowViewState<T>()
+
+    @Keep
+    class Success<T>(val result: T) : FlowViewState<T>()
+
+    @Keep
+    class Failure<T>(val code: Int, val msg: String) : FlowViewState<T>()
+}
+```
+
+UI：
+
+```
+ private var isRequestingList = false
+ private lateinit var listViewModel: ListViewModel
+
+ private fun initData() {
+        listViewModel = ViewModelProvider(this)[ListViewModel::class.java]
+        lifecycleScope.launchWhenStarted {
+            listViewModel.uiStateFlow.collect {
+                when (it) {
+                    is FlowViewState.Success -> {
+                        showList(it.result)
+                    }
+                    is FlowViewState.Failure -> {
+                        showListIfFail()
+                    }
+                    else -> {}
+                }
+            }
+        }
+        requestList()
+    } 
+
+  private fun requestList() {
+        if (!isRequestingList) {
+            isRequestingList = true
+            listViewModel.sendUiIntent( FlowViewIntent() )
+        }
+    }
+```
+
+使用 StateFlow 替换 LiveData ，并用结合 MVI 替换 MVVM 后，可以有以下优点：
+
+1. **唯一可信数据源**：MVVM 中 可能会存在大量 LiveData，这导致数据交互或并行更新出现逻辑不可控，添加 UIState 结合 StateFlow ，数据源只有 UIState；
+2. **数据单向流动**：MVVM 中存在数据 UI ⇆ ViewModel 相互流动，而 MVI 中数据只能从 Data Layer → ViewModel → UI 流动，数据是单向流动的。
+
+使用 StateFlow 替换 LiveData 来做事件状态更新，有以下区别：
+
+> - StateFlow 需要将初始状态传递给构造函数，而 LiveData 不需要。
+> - 当 View 进入 STOPPED 状态时，LiveData.observe() 会自动取消注册使用方，而从 StateFlow 或任何其他数据流收集数据的操作并不会自动停止。如需实现相同的行为，需要从 Lifecycle.repeatOnLifecycle 块收集数据流。
+
+### StateFlow总结
+
+热流 StateFlow，基于 SharedFlow 实现，所以它也有独立存在和共享的特点。但在 StateFlow 中发射数据，只有最新的值被缓存下来，所以当新老订阅者订阅时，只会收到它最后一次更新的值，如果发射的新值和当前值相等，订阅者也不会收到通知(防抖)。
+
+
+
+## 11.shareIn和stateIn
+
+### 1.冷流转换热流  
+
+在协程中，通过调用操作符shareIn与stateIn，可以将一个冷流转换成一个热流，这两个方法的区别如下：
+
+- **shareIn**：将一个冷流转换成一个标准的热流——SharedFlow类型的对象。
+- **stateIn**：将一个冷流转换成一个单数据更新的热流——StateFlow类型的对象。
+
+  ```
+  public fun <T> Flow<T>.shareIn(
+      scope: CoroutineScope,
+      started: SharingStarted,
+      replay: Int = 0
+  ): SharedFlow<T> {
+      ...
+  }
+  ```
+  
+  shareIn方法与stateIn方法的使用与实现的原理类似，下面以shareIn方法为例进行分析。
+
+### 2.热流的控制指令
+
+  热流的三个启动终止策略分别对应StartedEagerly、StartedLazily、StartedWhileSubscribed这三个类的对象。除了三个启动终止策略外，接口中还定义了一个核心方法command，用于将SharedFlow类型对象的全局变量subscriptionCount，转换为泛型SharingCommand的Flow类型对象，实际上就是通过监听订阅者数量的变化来发出不同的控制指令。
+
+  StartedEagerly、StartedLazily、StartedWhileSubscribed这三个类都实现了SharingStarted接口，并重写了command方法。如果我们需要自定义一个新的启动终止策略，也可以通过实现SharingStarted接口重写command方法来完成。
+
+#### 1.热流的控制指令
+
+  SharingCommand类是一个枚举类，定义了控制热流的指令，代码如下：
+
+```kotlin
+kotlin
+
+复制代码public enum class SharingCommand {
+    // 启动热流，并触发上游流的执行
+    START,
+
+    // 终止热流，并取消上游流的执行
+    STOP,
+
+    // 终止热流，并取消上游流的执行，同时将replayCache重置为初始状态
+    // 如果热流的类型为StateFlow，则将replayCache重置为初始值
+    // 如果热流的类型为SharedFlow，则调用resetReplayCache方法，清空replayCache
+    STOP_AND_RESET_REPLAY_CACHE
+}
+```
+
+  连续发射相同的指令不会有任何作用。先发射STOP指令，再发射START指令，可以触发热流的重启，并重新触发上游流的执行。
+
+#### 2.StartedEagerly策略的实现
+
+  StartedEagerly策略表示立刻启动热流，并且不会终止，由StartedEagerly类实现，代码如下：
+
+```kotlin
+kotlin
+
+复制代码private class StartedEagerly : SharingStarted {
+    override fun command(subscriptionCount: StateFlow<Int>): Flow<SharingCommand> =
+        flowOf(SharingCommand.START)
+        
+    override fun toString(): String = "SharingStarted.Eagerly"
+}
+
+...
+
+
+public fun <T> flowOf(value: T): Flow<T> = flow {
+    emit(value)
+}
+```
+
+  Eagerly策略不关心订阅者的数量，在触发后直接向下游发射START指令。
+
+#### 3.StartedLazily策略的实现
+
+  Lazily策略表示当第一个订阅者出现时启动热流，并且只会发射一次，由StartedLazily类实现，代码如下：
+
+```kotlin
+kotlin
+
+复制代码private class StartedLazily : SharingStarted {
+    override fun command(subscriptionCount: StateFlow<Int>): Flow<SharingCommand> = flow {
+        // 标志位，默认为false
+        var started = false
+        // 监听订阅者数量的变化
+        subscriptionCount.collect { count ->
+            // 如果订阅者数量大于0，且之前没有发射过指令
+            if (count > 0 && !started) {
+                // 设置标志位为true
+                started = true
+                // 发射START指令
+                emit(SharingCommand.START)
+            }
+        }
+    }
+
+    override fun toString(): String = "SharingStarted.Lazily"
+}
+```
+
+  Lazily策略只有当订阅者数量大于0的时候，才会向下游发射START指令，并且只会发射一次。
+
+#### 4.WhileSubscribed策略的实现
+
+  WhileSubscribed策略默认情况下表示当第一个订阅者出现时启动热流，并在最后一个订阅者消失时终止，保留replayCache中的数据，由StartedWhileSubscribed类实现，代码如下：
+
+```kotlin
+kotlin
+
+复制代码private class StartedWhileSubscribed(
+    private val stopTimeout: Long,
+    private val replayExpiration: Long
+) : SharingStarted {
+
+    ...
+
+    override fun command(subscriptionCount: StateFlow<Int>): Flow<SharingCommand> = 
+        // 监听订阅者变化，并对上游发射的数据进行转换
+        subscriptionCount.transformLatest { count ->
+            // 如果订阅者数量大于0
+            if (count > 0) {
+                // 发射START指令
+                emit(SharingCommand.START)
+            } else { // 如果订阅者数量等于0
+                // 延迟指定的热流终止时间
+                delay(stopTimeout)
+                // 如果指定的清除缓存时间大于0
+                if (replayExpiration > 0) {
+                    // 发射STOP指令
+                    emit(SharingCommand.STOP)
+                    // 延迟指定的清除缓存时间
+                    delay(replayExpiration)
+                }
+                // 发射STOP_AND_RESET_REPLAY_CACHE指令
+                emit(SharingCommand.STOP_AND_RESET_REPLAY_CACHE)
+            }
+        } // 只有当START指令发射后，才会向下游发射
+        .dropWhile { it != SharingCommand.START }
+        .distinctUntilChanged()// 只有当前后指令不同时，才会向下游发射
+
+    ...
+}
+```
+
+  WhileSubscribed策略在订阅者数量大于0的时候向下游发射START指令，在订阅者数量等于0的时候根据不同的延迟时间参数向下游发射STOP指令和STOP_AND_RESET_REPLAY_CACHE指令。并且必须先发射START指令，相邻重复的指令也不会被发射到下游。
+
+
+
+### 3.shareIn 和 stateIn 使用须知
+
+#### 使用 shareIn 与 stateIn 优化 locationsSource 数据流:
+
+使用底层数据流生产者发出位置更新。它是一个使用 [callbackFlow](https://link.juejin.cn/?target=https%3A%2F%2Fkotlin.github.io%2Fkotlinx.coroutines%2Fkotlinx-coroutines-core%2Fkotlinx.coroutines.flow%2Fcallback-flow.html) 实现的 **冷流**。每个新的收集者都会触发数据流的生产者代码块，同时也会将新的回调加入到 FusedLocationProviderClient。
+
+```
+class LocationDataSource(
+    private val locationClient: FusedLocationProviderClient
+) {
+    val locationsSource: Flow<Location> = callbackFlow<Location> {
+        val callback = object : LocationCallback() {
+            override fun onLocationResult(result: LocationResult?) {
+                result ?: return
+                try { offer(result.lastLocation) } catch(e: Exception) {}
+            }
+        }
+        requestLocationUpdates(createLocationRequest(), callback, Looper.getMainLooper())
+            .addOnFailureListener { e ->
+                close(e) // in case of exception, close the Flow
+            }
+        // 在 Flow 结束收集时进行清理
+        awaitClose {
+            removeLocationUpdates(callback)
+        }
+    }
+}
+```
+
+让我们看看在不同的用例下如何使用 shareIn 与 stateIn 优化 locationsSource 数据流。
+
+StateFlow 是 SharedFlow 的一种特殊配置，旨在优化分享状态: 最后被发送的项目会重新发送给新的收集者.
+
+两者之间的最主要区别，在于 `StateFlow` 接口允许您通过读取 `value` 属性同步访问其最后发出的值。而这不是 `SharedFlow` 的使用方式。
+
+#### **提升性能:**
+
+通过共享所有收集者要观察的同一数据流实例 (而不是按需创建同一个数据流的新实例)，这些 API 可以为我们提升性能。
+
+在下面的例子中，`LocationRepository` 消费了 `LocationDataSource` 暴露的 `locationsSource` 数据流，同时使用了 shareIn 操作符，从而让每个对用户位置信息感兴趣的收集者都从同一数据流实例中收集数据。这里只创建了一个 `locationsSource` 数据流实例并由所有收集者共享:
+
+```
+class LocationRepository(
+    private val locationDataSource: LocationDataSource,
+    private val externalScope: CoroutineScope
+) {
+    val locations: Flow<Location> = 
+        locationDataSource.locationsSource.shareIn(externalScope, WhileSubscribed())
+}
+
+```
+
+[WhileSubscribed](https://link.juejin.cn?target=https%3A%2F%2Fkotlin.github.io%2Fkotlinx.coroutines%2Fkotlinx-coroutines-core%2Fkotlinx.coroutines.flow%2F-while-subscribed.html) 共享策略用于在没有收集者时取消上游数据流。这样一来，我们便能在没有程序对位置更新感兴趣时避免资源的浪费。
+
+> **Android 应用小提醒！** 在大部分情况下，您可以使用 **WhileSubscribed(5000)**，当最后一个收集者消失后再保持上游数据流活跃状态 5 秒钟。这样在某些特定情况 (如配置改变) 下可以避免重启上游数据流。当上游数据流的创建成本很高，或者在 ViewModel 中使用这些操作符时，这一技巧尤其有用。
+
+
+
+#### **缓冲事件**:
+
+在下面的例子中，我们的需求有所改变。现在要求我们保持监听位置更新，同时要在应用从后台返回前台时在屏幕上显示最后的 10 个位置:
+
+```
+class LocationRepository(
+    private val locationDataSource: LocationDataSource,
+    private val externalScope: CoroutineScope
+) {
+    val locations: Flow<Location> = 
+        locationDataSource.locationsSource
+            .shareIn(externalScope, SharingStarted.Eagerly, replay = 10)
+}
+```
+
+我们将参数 `replay` 的值设置为 10，来让最后发出的 10 个项目保持在内存中，同时在每次有收集者观察数据流时重新发送这些项目。为了保持内部数据流始终处于活跃状态并发送位置更新，我们使用了共享策略 `SharingStarted.Eagerly`，这样就算没有收集者，也能一直监听更新。
+
+#### **缓存数据:**
+
+我们的需求再次发生变化，这次我们不再需要应用处于后台时 *持续* 监听位置更新。不过，我们需要缓存最后发送的项目，让用户在获取当前位置时能在屏幕上看到一些数据 (即使数据是旧的)。针对这种情况，我们可以使用 stateIn 操作符。
+
+```Kotlin
+Kotlin
+
+复制代码class LocationRepository(
+    private val locationDataSource: LocationDataSource,
+    private val externalScope: CoroutineScope
+) {
+    val locations: Flow<Location> = 
+        locationDataSource.locationsSource.stateIn(externalScope, WhileSubscribed(), EmptyLocation)
+}
+```
+
+`Flow.stateIn` 可以缓存最后发送的项目，并重放给新的收集者。
+
+
+
+#### **注意！不要在每个函数调用时创建新的实例:**
+
+**切勿** 在调用某个函数调用返回时，使用 shareIn 或 stateIn 创建新的数据流。这样会在每次函数调用时创建一个新的 SharedFlow 或 StateFlow，而它们将会一直保持在内存中，直到作用域被取消或者在没有任何引用时被垃圾回收。
+
+```Kotlin
+Kotlin
+
+复制代码class UserRepository(
+    private val userLocalDataSource: UserLocalDataSource,
+    private val externalScope: CoroutineScope
+) {
+    // 不要像这样在函数中使用 shareIn 或 stateIn 
+    // 这将在每次调用时创建新的 SharedFlow 或 StateFlow，而它们将不会被复用。
+    fun getUser(): Flow<User> =
+        userLocalDataSource.getUser()
+            .shareIn(externalScope, WhileSubscribed())    
+
+    // 可以在属性中使用 shareIn 或 stateIn 
+    val user: Flow<User> = 
+        userLocalDataSource.getUser().shareIn(externalScope, WhileSubscribed())
+}
+```
+
+#### **需要入参的数据流**
+
+需要入参 (如 `userId`) 的数据流无法简单地使用 `shareIn` 或 `stateIn` 共享。以开源项目——Google I/O 的 Android 应用 [iosched](https://link.juejin.cn?target=https%3A%2F%2Fgithub.com%2Fgoogle%2Fiosched) 为例，您可以在 [源码中](https://link.juejin.cn?target=https%3A%2F%2Fgithub.com%2Fgoogle%2Fiosched%2Fblob%2Fmain%2Fshared%2Fsrc%2Fmain%2Fjava%2Fcom%2Fgoogle%2Fsamples%2Fapps%2Fiosched%2Fshared%2Fdata%2Fuserevent%2FFirestoreUserEventDataSource.kt%23L107) 看到，从 [Firestore](https://link.juejin.cn?target=https%3A%2F%2Ffirebase.google.com%2Fdocs%2Ffirestore%2Fquickstart) 获取用户事件的数据流是通过 `callbackFlow` 实现的。由于其接收 `userId` 作为参数，因此无法简单使用 `shareIn` 或 `stateIn` 操作符对其进行复用。
+
+```Kotlin
+Kotlin
+
+复制代码class UserRepository(
+    private val userEventsDataSource: FirestoreUserEventDataSource
+) {
+    // 新的收集者会在 Firestore 中注册为新的回调。
+    // 由于这一函数依赖一个 `userId`，所以在这个函数中
+    // 数据流无法通过调用 shareIn 或 stateIn 进行复用.
+    // 这样会导致每次调用函数时，都会创建新的  SharedFlow 或 StateFlow
+    fun getUserEvents(userId: String): Flow<UserEventsResult> =
+        userLocalDataSource.getObservableUserEvents(userId)
+}
+```
+
+如何优化这一用例取决于您应用的需求:
+
+- 您是否允许同时从多个用户接收事件？如果答案是肯定的，您可能需要为 `SharedFlow` 或 `StateFlow` 实例创建一个 map，并在 `subscriptionCount` 为 0 时移除引用并退出上游数据流。
+- 如果您只允许一个用户，并且收集者需要更新为观察新的用户，您可以向一个所有收集者共用的 `SharedFlow` 或 `StateFlow` 发送事件更新，并将公共数据流作为类中的变量。
+
+`shareIn` 与 `stateIn` 操作符可以与冷流一同使用来提升性能，您可以使用它们在没有收集者时添加缓冲，或者直接将其作为缓存机制使用。小心使用它们，不要在每次函数调用时都创建新的数据流实例——这样会导致资源的浪费及预料之外的问题！
+
+
+
+### 4.shareIn 转换深入
+
+
+
+可以使用 shareIn 方法把普通 flow 冷流转化成 SharedFlow 热流。通过 shareIn 创建的 SharedFlow 会把数据供给 View 订阅，同时也会订阅上游的数据流：
+
+```
+public fun <T> Flow<T>.shareIn(
+    scope: CoroutineScope,
+    started: SharingStarted,
+    replay: Int = 0
+): SharedFlow<T>
+```
+
+有三个参数：
+
+- scope: 用于共享数据流的 CoroutineScope, 此作用域函数的生命周期应长于任何使用方，使共享数据流在足够长的时间内保持活跃状态。
+- started: 启动策略
+- replay: 同上 replay 含义
+
+started 有三种取值：
+
+- Eagerly: 立即启动，到 scope 作用域被结束时停止
+- Lazily: 当存在首个订阅者时启动，到 scope 作用域被结束时停止
+- WhileSubscribed: 在没有订阅者的情况下取消订阅上游数据流，避免不必要的资源浪费
+
+对于只执行一次的操作，可以使用 Lazily 或 Eagerly, 否则可以使用 WhileSubscribed 来实现一些优化。
+
+它支持两个参数：
+
+```
+public fun WhileSubscribed(
+    stopTimeoutMillis: Long = 0,
+    replayExpirationMillis: Long = Long.MAX_VALUE
+): SharingStarted
+
+```
+
+- stopTimeoutMillis: 最后一个订阅者结束订阅后多久停止订阅上游流
+
+- replayExpirationMillis: 数据 replay 的过时时间，超出时间后，新订阅者不会收到历史数据. 这个参数指定一个再停止流执行和清除流缓存的时间间隔，也就是当停止流执行后，间隔`replayExpirationMillis`ms去清楚流的缓存。
+
+
+
+#### 简单示例1:
+
+```
+val flow12 = flow<Int> {
+    repeat(100) {                                                                           
+        delay(20)                                                                       
+        emit(cur)                                                                       
+        println("flow12 emit data: ${cur++}")   
+    }                                                                                                           
+}                                                                                                                  
+/**                                                        
+ * started 有三种取值：                                                                                          
+ * Eagerly: 立即启动，到 scope 作用域被结束时停止                   
+ * Lazily: 当存在首个订阅者时启动，到 scope 作用域被结束时停止               
+ * WhileSubscribed: 在没有订阅者的情况下取消订阅上游数据流，避免不必要的资源浪费   
+ */                                                                                binding.button12.setOnClickListener {                                          
+    //设置SharingStarted.Eagerly后, 上面的repeat方法会立即启动然后开始emit数据  
+    flow12.shareIn(lifecycleScope, SharingStarted.Eagerly, 10)      
+}
+```
+
+#### 简单示例2:
+
+**Repository 层**：
+
+```Kotlin
+Kotlin
+
+复制代码class MainRepository {
+    private val _data: MutableSharedFlow<Int> = MutableSharedFlow()
+    val data: SharedFlow<Int> = _data
+
+    suspend fun request() {
+        var cur = 1
+        repeat(100) {
+            delay(100)
+            _data.emit(cur) // 模拟生产数据
+            println("emit data: ${cur++}")
+        }
+    }
+}
+```
+
+**ViewModel 层**：
+
+```Kotlin
+Kotlin
+
+复制代码class MainViewModel(
+    private val repository: MainRepository
+) : CoroutineScope by CoroutineScope(Dispatchers.IO + SupervisorJob()) {
+    val data by lazy {
+        repository.data.shareIn(
+            scope = this,
+            started = SharingStarted.WhileSubscribed(5000)
+        ).onEach {
+            println("repository data: $it")
+        }.map {
+            // 转换数据
+            "UI Data-$it"
+        }
+    }
+    private val _state = MutableStateFlow(MainState.INIT)
+    val state: StateFlow<MainState> = _state
+
+    fun refresh() {
+        launch {
+            _state.value = MainState.LOADING
+            repository.request()
+            _state.value = MainState.INIT
+        }
+    }
+}
+```
+
+**View 层**：
+
+```Kotlin
+Kotlin
+
+复制代码jobData = launch {
+    lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+        viewModel.data.collect {
+            println("data: $it")
+        }
+    }
+}
+jobState = launch {
+    lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+        viewModel.state.collect {
+            println("state: $it")
+        }
+    }
+}
+```
+
+
+
+### 5.stateIn转换
+
+和 SharedFlow 类似，也可以用 stateIn 将普通流转化成 StateFlow:
+
+```Kotlin
+Kotlin
+
+复制代码public fun <T> Flow<T>.stateIn(
+    scope: CoroutineScope,
+    started: SharingStarted,
+    initialValue: T
+): StateFlow<T>
+```
+
+跟 shareIn 不同的是需要传入一个初始值。
+
+### 6.比较好的文章
+
+Flow 操作符 shareIn 和 stateIn 使用须知 https://juejin.cn/post/6998066384290709518
+
+
+
+## 12.Flow 与 RxJava
+
+`Flow` 和 `RxJava` 的定位很接近，罗列一下它们的对应关系：
+
+- `Flow` = (cold冷流) `Flowable` / `Observable` / `Single`
+- `Channel` = `Subjects`
+- `StateFlow` = `BehaviorSubjects` (永远有值)
+- `SharedFlow` = `PublishSubjects` (无初始值)
+- `suspend function` = `Single` / `Maybe` / `Completable`
+
+
+
+
+
+## 13.StateFlow Channel  SharedFlow 特性对比
+
+### 1. StateFlow 的特性
+
+StateFlow 是一种特殊的 Flow，它用于持有状态。它总是有一个初始值，并且只会在状态有变化时发射新的值。它是热流（Hot Flow），意味着当有多个收集器时，它们会共享同一个状态，并且只有最新的状态会被发射。适用于表示UI状态，因为UI总是需要知道当前的状态是什么。
+
+**为什么页面的状态用StateFlow来发送和监听，有什么道理吗？**
+
+1. 状态保留 StateFlow 自动保持其最新值的状态。这意味着每当有新的收集者开始收集此流时，它会立即接收到最新状态的最新值。这对于 UI 编程尤其重要，因为您通常希望 UI 组件（如Activity、Fragment或View）能够立即反映当前的状态，即使它们在状态更新后才开始观察状态。
+2. 去重 StateFlow 仅在状态发生变化时通知收集者。如果您向 StateFlow 发射一个与当前值相同的值，这个值将不会被重新发射给收集者。这有助于减少不必要的 UI 更新和性能开销，因为您的 UI 组件不会对相同的状态重复渲染。
+3. 线程安全 StateFlow 的操作是线程安全的，确保即使在并发环境中，状态的更新和读取也保持一致性。在复杂的应用程序中，可能有多个协程同时尝试更新状态，StateFlow 保证了这种操作的正确性。
+
+**使用默认的SharedFlow 和 普通的Flow冷流不行吗？**
+
+- SharedFlow：虽然 SharedFlow 可以高度自定义，包括配置重播和缓存策略，但它不保证自动保持和重放最新状态。如果使用 SharedFlow，您需要手动管理状态的保留和更新，这增加了复杂性。
+- 普通 Flow：普通的 Flow 是一个冷流，意味着它不保持状态，并且每次有新的收集者时，数据的产生逻辑都会从头开始。这使得它不适合作为表示 UI 状态的机制，因为您通常希望即使在数据生产后也能让后来的收集者立即获得最新状态。
+
+### 2. Channel 的特性
+
+Channel 类似于阻塞队列，但它是挂起的，适用于协程之间的通信。它可以配置为不同的模式，如缓存大小和发送行为。适用于事件的生产者-消费者模型，如任务执行、消息传递等。
+
+**为什么 sendUiIntent 中接收 UI 的驱动事件要用 Channel 来发送和监听，有什么道理吗？**
+
+1. 事件的即时性和一次性 Channel 被设计为用于通信的原语，特别适合于处理一次性事件或命令，这些事件或命令通常不需要被重复消费或保留状态。在 UI 交互中，用户的操作（如点击、滑动等）往往是即时和一次性的，Channel 能够有效地传递这些即时事件，确保它们被及时处理。
+2. 缓冲和背压管理 Channel 提供了不同的缓冲策略，包括无限缓冲（Channel.UNLIMITED）、有界缓冲和不缓冲（Channel.RENDEZVOUS）。这使得开发者可以根据具体的应用场景选择最合适的策略来处理事件流，例如，通过使用无限缓冲，可以确保在高频事件发生时不会丢失任何事件。
+3. 明确的消费模式 与 Flow 相比，Channel 提供了更明确的消费模式，即发送方和接收方。这种模式使得事件的发送和接收更加直观，尤其是在需要明确处理每个事件的场景中。此外，Channel 的 send 和 receive 操作可以很容易地集成到协程中，提供了更灵活的并发处理能力。
+
+**使用默认的SharedFlow 和 StateFlow，普通的Flow冷流不行吗？**
+
+- SharedFlow：虽然 SharedFlow 可以用于处理事件，并且支持配置重播和并发策略，但它更适合于需要多个观察者共享和重播事件的场景。对于一次性的、即时的 UI 事件，SharedFlow 的这些特性可能并不是必需的。
+- StateFlow：StateFlow 主要用于表示和观察可变状态，它保留最新的状态值并且只在状态变化时通知观察者。这种特性使得 StateFlow 不适合用于传递一次性的 UI 事件。
+- 普通 Flow：普通的 Flow 是一个冷流，它不保留状态或事件，而是在每次收集时重新开始生成数据。这种特性使得它不适合于处理即时的 UI 事件，因为事件可能会在观察者开始收集之前发生并且丢失。
+
+综上所述，Channel 在处理即时和一次性的 UI 事件方面提供了特定的优势，尤其是在需要明确的事件发送和接收、以及灵活的缓冲和背压管理时。这些特性使得 Channel 成为在特定场景下处理 UI 事件的理想选择。
+
+### 3. SharedFlow 的特性
+
+SharedFlow 也是一种热流，能够向多个收集器广播事件。它提供了更灵活的配置，比如可以配置重播(replay)的值的数量，以及在没有收集器的情况下保留值的能力。适用于一次性事件、消息广播等场景。
+
+**默认的 SharedFlow**
+
+**为什么UI的效果通知要用 SharedFlow 来发送和监听，有什么道理吗？**
+
+1. 多观察者支持 与 StateFlow 和普通的 Flow 相比，SharedFlow 支持多个观察者同时订阅事件，而且每个观察者都会收到独立的事件流。这一点对于 UI 事件非常重要，因为可能有多个组件或功能同时对同一事件感兴趣，并且需要独立处理这些事件。
+2. 事件重播和缓存策略 SharedFlow 可以配置事件的重播 (Replay) 和缓存 (Buffer) 策略。这意味着你可以控制新订阅者接收多少最近的事件，或者当流的发射速度超过处理速度时如何缓存事件。这在处理 UI 事件时非常有用，例如，当你希望新加入的观察者能够接收到最近的状态或事件时。
+3. 精细的背压管理 尽管 Channel 也提供了背压管理，但 SharedFlow 允许更精细的背压控制，特别是在配置缓存和重播行为时。这对于确保 UI 事件不会因为过载而丢失或导致性能问题非常关键。
+
+**使用Channel 和 StateFlow，普通的Flow冷流不行吗？**
+
+- Channel：虽然 Channel 适用于一次性事件和瞬时通信，但其主要设计用于协程之间的通信，而不是状态管理或多观察者场景。Channel 的每个事件只能被一个观察者消费，这限制了其在 UI 事件广播中的使用。
+- StateFlow：StateFlow 适用于状态管理，因为它总是保留最新的状态值，并且能够向新订阅者重播这个状态。然而，它不适合用于表示可以发生多次的一次性事件，如点击事件。
+- 普通 Flow：普通的 Flow 是一个冷流，它只有在收集时才开始发射数据。这意味着它不适合用于事件的多订阅者广播或需要重播最近事件给新订阅者的场景。
+
+综上所述，SharedFlow 在用于 UI 效果通知时提供了对多观察者支持、可配置的重播和缓存策略以及精细的背压管理，这些特性使得它成为处理这些场景的理想选择。
+
+**配置版 SharedFlow**
+
+SharedFlow 是 Kotlin 协程中最强大的 Flow 实现，他有很多的配置，具有最大的灵活性和可定制性。我们可以通过设置不同的参数和处理策略，来模拟 StateFlow 和 Channel 的行为。
+
+**模拟 StateFlow**
+
+StateFlow 持有一个值，并且只在值改变时通知观察者。要用 SharedFlow 模拟这个行为，我们可以配置它的重播缓存(replay cache)大小为 1，并且设置它的行为，使它只在值改变时发射数据。
+
+```ini
+ini
+
+复制代码val sharedFlowState = MutableSharedFlow<Int>(
+    replay = 1,
+    onBufferOverflow = BufferOverflow.DROP_OLDEST
+).apply {
+    tryEmit(initialValue)  // 初始化SharedFlow的值
+}
+
+// 对比StateFlow
+val stateFlow = MutableStateFlow(initialValue)
+```
+
+使用 tryEmit 来设置初始值，这样就模拟了 StateFlow 的行为。接下来，您需要确保只有在值改变时才调用 emit 方法。
+
+**模拟 Channel**
+
+Channel 用于协程间的通信，并且可以配置为有不同的容量。用 SharedFlow 来模拟 Channel，您可以设置它的重播值为 0 并配置缓存策略。
+
+```ini
+ini
+
+复制代码val sharedFlowChannel = MutableSharedFlow<Int>(
+    replay = 0,
+    extraBufferCapacity = Channel.BUFFERED.capacity, // 或者设置具体的数值
+    onBufferOverflow = BufferOverflow.SUSPEND
+)
+
+// 对比Channel
+val channel = Channel<Int>(Channel.BUFFERED)
+```
+
+示例：
+
+```kotlin
+kotlin
+
+复制代码import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.*
+
+// 模拟StateFlow
+fun simulateStateFlow() = MutableSharedFlow<Int>(replay = 1)
+
+// 模拟Channel
+fun simulateChannel() = MutableSharedFlow<Int>(replay = 0, extraBufferCapacity = 1(Int.MAX_VALUE, // 无限缓冲区), onBufferOverflow = BufferOverflow.SUSPEND)
+
+fun main() = runBlocking {
+    val simulatedStateFlow = simulateStateFlow()
+    simulatedStateFlow.tryEmit(1) // 设置初始值
+
+    launch {
+        simulatedStateFlow.collect { value ->
+            println("StateFlow simulated: Received $value")
+        }
+    }
+    simulatedStateFlow.emit(2) // 发送新值
+    simulatedStateFlow.emit(2) // 发送相同的值，不会再次通知
+
+    val simulatedChannel = simulateChannel()
+
+    launch {
+      	//在接收的时候加distinctUntilChanged()去重
+        simulatedChannel.distinctUntilChanged().collect { value ->
+            println("Channel simulated: Received $value")
+        }
+    }
+    simulatedChannel.emit(1) // 发送值
+    simulatedChannel.emit(2) // 发送另一个值
+
+    delay(1000) // 等待收集
+}
+```
+
+### 后记:
+
+本文我们分别说明普通Flow，StateFlow，SharedFlow，Channel的特性和他们的差异，以及为什么 MVI 场景下要选用对应的 Flow 来完成框架。
+
+具体的分析可以在文中查看，那么我们接下来再看一个问题，如果此时 Activity 销毁重建，那么Channel 的驱动事件，StateFlow的UI状态，和SharedFlow 的UI效果，会有怎样的效果呢？
+
+在 Android 应用中，Activity 的销毁和重建（例如，由于配置更改）会对使用 Channel、StateFlow 和 SharedFlow 的事件和状态管理产生不同的影响。我们可以分别讨论它们的行为：
+
+1. StateFlow（UI状态） StateFlow 保持其状态，即便是当 Activity 销毁并重建。这意味着新的 Activity 实例订阅 uiStateFlow 时，将立即接收到当前的状态，也就是获取了当前状态的一个快照，确保 UI 正确反映了最新的状态。所以我们会根据UI状态刷新对应的布局展示，符合我们的预期。
+2. Channel（驱动事件） Channel 用于处理一次性的事件或者命令，它是一个热流，意味着一旦事件被发送并被收集，该事件就消失了。如果 Activity 在事件发送后被销毁并重建，除非 ViewModel 重新发送事件，否则新的 Activity 实例不会接收到之前的事件。因此不会重新驱动事件，符合我们的预期。
+3. SharedFlow（UI效果） 对于 SharedFlow，其行为取决于你对它的配置，尤其是它的重播策略。在 BaseEISViewModel 中，MutableSharedFlow 被初始化时没有指定重播或缓冲策略，因此默认情况下它不会重播旧的事件给新的订阅者。这意味着，在 Activity 重建时，只要没有新的事件被发送，就不会出现重复触发的情况。所以包括页面导航，页面弹窗，吐司等UI效果也不会触发，符合我们的预期。
+
+### 总结:
+
+StateFlow 用于持续状态的管理，保证了状态的一致性，并且默认保存有状态的一个快照，重建之后也能恢复，特别适合 UI 状态的管理。
+
+Channel 主要处理一次性事件，一旦事件被收集，它就不会再次触发，除非显式地重新发送，特别适合 UI 事件的驱动
+
+SharedFlow 由于默认配置并没有配置重播策略，则不会导致重复触发问题，特别适合 UI 效果的管理。

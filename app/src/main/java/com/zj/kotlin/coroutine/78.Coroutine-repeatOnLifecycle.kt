@@ -22,6 +22,7 @@ import kotlinx.coroutines.launch
  * 2.repeatOnLifecycle会在当前生命周期大于等于RESUMED的时候执行里面的方法,
  * 然后小于该生命周期后cancel掉该协程Job
  *
+ *
  * CreateTime:2022/7/24 11:50
  * @author zhengjiong
  */
