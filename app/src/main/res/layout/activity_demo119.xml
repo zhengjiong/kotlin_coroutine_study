@@ -112,16 +112,67 @@
             android:id="@+id/button16"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="button16" />
+            android:textAllCaps="false"
+            android:text="throw null exception" />
         <Button
             android:id="@+id/button17"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="button17" />
+            android:textAllCaps="false"
+            android:text="send value" />
         <Button
             android:id="@+id/button18"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="button18-collectLatest" />
+        <Button
+            android:id="@+id/button19"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="button19-collectLatest" />
+        <Button
+            android:id="@+id/button20"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="button20-collectLatest" />
+
+        <Button
+            android:id="@+id/button21"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="button21-collectLatest" />
+
+        <Button
+            android:id="@+id/button22"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="button22-collectLatest" />
+        <Button
+            android:id="@+id/button23"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="button23-collectLatest" />
+        <Button
+            android:id="@+id/button23_1"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="button23_1-collectLatest" />
+
+        <Button
+            android:id="@+id/button24"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="button24-collectLatest" />
+        <Button
+            android:id="@+id/button25"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="button25-collectLatest" />
     </com.google.android.flexbox.FlexboxLayout>
 </layout>

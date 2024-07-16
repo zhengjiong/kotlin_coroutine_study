@@ -370,7 +370,9 @@ class Demo119Activity : AppCompatActivity() {
         }
 
         /**
-         * stateFlow1抛出异常后, 之后的stateFlow1和stateFlow2都无法再接收消息
+         * button18  throwable  java.lang.NullPointerException
+         *
+         * stateFlow1抛出异常后, CoroutineExceptionHandler会捕获到异常, 之后的stateFlow1和stateFlow2都无法再接收消息
          */
         binding.button18.setOnClickListener {
             backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
@@ -388,6 +390,280 @@ class Demo119Activity : AppCompatActivity() {
                 launch {
                     stateFlow2.collectLatest {
                         println("button18  stateFlow2   collectLatest  $it")
+                    }
+
+                }
+            }
+        }
+
+        /**
+         * stateFlow1抛出异常后, 之后的stateFlow1和stateFlow2都无法再接收消息,
+         * 内部的launch的CoroutineExceptionHandler不会捕获到异常而是外层的launch CoroutineExceptionHandler捕获到异常,
+         * 结果和上面的button15一模一样
+         */
+        binding.button19.setOnClickListener {
+            backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                println("button19  throwable  ${throwable}")
+            }) {
+                supervisorScope {
+                    launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                        println("button19内部 launch throwable  ${throwable}")
+                    }) {
+                        stateFlow1.collectLatest {
+                            println("button19  stateFlow1   collectLatest  $it")
+                            if (it) {
+                                throw NullPointerException()
+                            }
+                        }
+                    }
+
+                    launch {
+                        stateFlow2.collectLatest {
+                            println("button19  stateFlow2   collectLatest  $it")
+                        }
+
+                    }
+                }
+            }
+        }
+
+        /**
+         * stateFlow1抛出异常后, 之后的stateFlow1和stateFlow2都无法再接收消息,
+         * 内部的launch的CoroutineExceptionHandler不会捕获到异常,而是外层的launch CoroutineExceptionHandler捕获到异常,
+         * 结果和上面的button15一模一样
+         */
+        binding.button20.setOnClickListener {
+            backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                println("button20  throwable  $throwable")
+            }) {
+                coroutineScope {
+                    launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                        println("button20内部 launch throwable  ${throwable}")
+                    }) {
+                        stateFlow1.collectLatest {
+                            println("button20  stateFlow1   collectLatest  $it")
+                            if (it) {
+                                throw NullPointerException()
+                            }
+                        }
+                    }
+
+                    launch {
+                        stateFlow2.collectLatest {
+                            println("button20  stateFlow2   collectLatest  $it")
+                        }
+
+                    }
+                }
+            }
+        }
+
+        /**
+         * stateFlow1抛出异常后, 之后的stateFlow1和stateFlow2都无法再接收消息,
+         * 内部的launch的CoroutineExceptionHandler不会捕获到异常,外层的launch CoroutineExceptionHandler也不能捕获到异常,
+         * 而是catch捕获到异常
+         */
+        binding.button21.setOnClickListener {
+            backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                println("button21  throwable  $throwable")
+            }) {
+                try {
+                    coroutineScope {
+                        launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                            println("button21内部 launch throwable  $throwable")
+                        }) {
+                            stateFlow1.collectLatest {
+                                println("button21  stateFlow1   collectLatest  $it")
+                                if (it) {
+                                    throw NullPointerException()
+                                }
+                            }
+                        }
+
+                        launch {
+                            stateFlow2.collectLatest {
+                                println("button21  stateFlow2   collectLatest  $it")
+                            }
+
+                        }
+                    }
+                } catch (e: Exception) {
+                    println("button21 catch $e")
+                }
+            }
+        }
+
+        /**
+         * button22内部 launch throwable  java.lang.NullPointerException
+         *
+         * stateFlow1抛出异常后, 之后的stateFlow1无法再接收消息但是stateFlow2可以再接收消息,
+         * 内部的launch的CoroutineExceptionHandler会捕获到异常,外层的launch CoroutineExceptionHandler不能捕获到异常,
+         * try-catch也不能捕获到异常
+         */
+        binding.button22.setOnClickListener {
+            backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                println("button22  throwable  $throwable")
+            }) {
+                try {
+                    supervisorScope {
+                        launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                            println("button22内部 launch throwable  $throwable")
+                        }) {
+                            stateFlow1.collectLatest {
+                                println("button22  stateFlow1   collectLatest  $it")
+                                if (it) {
+                                    throw NullPointerException()
+                                }
+                            }
+                        }
+
+                        launch {
+                            stateFlow2.collectLatest {
+                                println("button22  stateFlow2   collectLatest  $it")
+                            }
+
+                        }
+                    }
+                } catch (e: Exception) {
+                    println("button22 catch $e")
+                }
+            }
+        }
+
+        /**
+         * button23内部 launch throwable  java.lang.NullPointerException
+         *
+         * stateFlow1抛出异常后, 之后的stateFlow1无法再接收消息但是stateFlow2可以再接收消息,
+         * 内部的launch的CoroutineExceptionHandler会捕获到异常,外层的launch CoroutineExceptionHandler不能捕获到异常
+         */
+        binding.button23.setOnClickListener {
+            backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                println("button23  throwable  $throwable")
+            }) {
+                backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                    println("button23内部 launch throwable  $throwable")
+                }) {
+                    stateFlow1.collectLatest {
+                        println("button23  stateFlow1   collectLatest  $it")
+                        if (it) {
+                            throw NullPointerException()
+                        }
+                    }
+                }
+
+                backgroundScope.launch {
+                    stateFlow2.collectLatest {
+                        println("button23  stateFlow2   collectLatest  $it")
+                    }
+
+                }
+            }
+        }
+
+        /**
+         * 外层的CoroutineExceptionHandler无法捕获到异常, 会直接崩溃
+         */
+        binding.button231.setOnClickListener {
+            backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                println("button23  throwable  $throwable")
+            }) {
+                backgroundScope.launch {
+                    stateFlow1.collectLatest {
+                        println("button23  stateFlow1   collectLatest  $it")
+                        if (it) {
+                            throw NullPointerException()
+                        }
+                    }
+                }
+
+                backgroundScope.launch {
+                    stateFlow2.collectLatest {
+                        println("button23  stateFlow2   collectLatest  $it")
+                    }
+
+                }
+            }
+        }
+
+        /**
+         * button24  内部 catch  java.lang.NullPointerException
+         *
+         * stateFlow1抛出异常后, 之后的stateFlow1无法再接收消息但是stateFlow2可以再接收消息,
+         * 最内部的try-catch会捕获到异常,其余所有地方都不能捕获到异常
+         */
+        binding.button24.setOnClickListener {
+            backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                println("button24  throwable  $throwable")
+            }) {
+                backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                    println("button24 CoroutineExceptionHandler throwable  $throwable")
+                }) {
+                    try {
+                        supervisorScope {
+                            try {
+                                stateFlow1.collectLatest {
+                                    println("button24  stateFlow1   collectLatest  $it")
+                                    if (it) {
+                                        throw NullPointerException()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                //这里可以try-catch到
+                                println("button24  内部 catch  $e")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        println("button24  外部 catch  $e")
+                    }
+
+                }
+
+                backgroundScope.launch {
+                    stateFlow2.collectLatest {
+                        println("button24  stateFlow2   collectLatest  $it")
+                    }
+
+                }
+            }
+        }
+
+
+        /**
+         * button25  内部 catch  java.lang.NullPointerException
+         *
+         * stateFlow1抛出异常后, 之后的stateFlow1无法再接收消息但是stateFlow2可以再接收消息,
+         * 最内部的try-catch会捕获到异常,其余所有地方都不能捕获到异常
+         */
+        binding.button25.setOnClickListener {
+            backgroundScope.launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                println("button25  throwable  $throwable")
+            }) {
+                launch(CoroutineExceptionHandler { coroutineContext, throwable ->
+                    println("button25 CoroutineExceptionHandler throwable  $throwable")
+                }) {
+                    try {
+                        supervisorScope {
+                            try {
+                                stateFlow1.collectLatest {
+                                    println("button25  stateFlow1   collectLatest  $it")
+                                    if (it) {
+                                        throw NullPointerException()
+                                    }
+                                }
+                            } catch (e: Exception) {
+                                //这里可以try-catch到
+                                println("button25  内部 catch  $e")
+                            }
+                        }
+                    } catch (e: Exception) {
+                        println("button25  外部 catch  $e")
+                    }
+
+                }
+
+                launch {
+                    stateFlow2.collectLatest {
+                        println("button25  stateFlow2   collectLatest  $it")
                     }
 
                 }
