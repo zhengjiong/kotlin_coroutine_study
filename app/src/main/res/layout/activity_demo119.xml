@@ -174,5 +174,35 @@
             android:layout_height="wrap_content"
             android:textAllCaps="false"
             android:text="button25-collectLatest" />
+        <Button
+            android:id="@+id/button26"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="button26-collectLatest" />
+        <Button
+            android:id="@+id/button27"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="button27-collectLatest" />
+        <Button
+            android:id="@+id/button28"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="button28-collectLatest" />
+        <Button
+            android:id="@+id/button29"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="button29-collectLatest" />
+        <Button
+            android:id="@+id/button30"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textAllCaps="false"
+            android:text="button30-collectLatest" />
     </com.google.android.flexbox.FlexboxLayout>
 </layout>

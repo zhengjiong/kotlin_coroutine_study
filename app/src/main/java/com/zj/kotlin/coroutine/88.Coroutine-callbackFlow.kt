@@ -13,6 +13,12 @@ import kotlin.concurrent.thread
 
 /**
  *
+ * callbackFlow 是 Kotlin 协程库中的一个 API，用于将回调风格的代码转换为流 (Flow)。这对于处理异步事件非常有用，例如网络请求、传感器数据、用户输入事件等。
+ *
+ * callbackFlow 是一个冷流 (cold flow)，它只有在被收集的时候才会启动。通过 callbackFlow，我们可以将回调函数的结果发送到流中，并在流被收集时处理这些结果。
+ *
+ * 以下是一个使用 callbackFlow 的示例，演示如何将一个假设的回调 API 转换为 Flow。
+ *
  * CreateTime:2022/7/24 11:50
  * @author zhengjiong
  */
