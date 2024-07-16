@@ -35,6 +35,10 @@ class Demo109Activity : AppCompatActivity() {
 
         val flow1 = flowOf(1, 2, 3)
         binding.button1.setOnClickListener {
+            /**
+             * 输出:
+             * 16:00:07:590 [Thread[main,5,main]]->Result---3
+             */
             lifecycleScope.launch {
                 flow1.collectLatest {
                     delay(1000)
@@ -49,6 +53,14 @@ class Demo109Activity : AppCompatActivity() {
                 emit(it.toString())
             }
         }.flowOn(Dispatchers.IO)
+        /**
+         * 输出:
+         * 16:10:24:104 [Thread[main,5,main]]->collectLatest 0
+         * 16:10:24:505 [Thread[main,5,main]]->collectLatest 1
+         * 16:10:24:907 [Thread[main,5,main]]->collectLatest 2
+         * 16:10:25:309 [Thread[main,5,main]]->collectLatest 3
+         * 16:10:25:714 [Thread[main,5,main]]->collectLatest 4
+         */
         binding.button2.setOnClickListener {
             lifecycleScope.launch {
                 flow2.collectLatest {
@@ -57,16 +69,34 @@ class Demo109Activity : AppCompatActivity() {
             }
         }
 
+
         val flow3 = flow<String> {
             repeat(3) {
                 emit(it.toString())
+                delay(100)
             }
         }.flowOn(Dispatchers.IO)
+        /**
+         * 输出:
+         * ->collectLatest start -> 0
+         * ->collectLatest start -> 1
+         * ->collectLatest start -> 2
+         * ->collectLatest end -> 2
+         *
+         * 解释:
+         * 会输出所有的原因是英文delay在下边, 所以delay会被取消多次
+         *
+         * 当第一个数据 "0" 发出时,立即开始收集并输出 collectLatest start -> 0
+         * 在还未完成收集 "0" 的过程中,第二个数据 "1" 发出,此时 collectLatest 立即取消之前的收集,开始收集 "1" 并输出 collectLatest start -> 1
+         * 同理,第三个数据 "2" 发出时,collectLatest 立即取消之前的收集,开始收集 "2" 并输出 collectLatest start -> 2
+         * 最后,完成对 "2" 的收集,输出 collectLatest end -> 2
+         */
         binding.button3.setOnClickListener {
             lifecycleScope.launch {
                 flow3.collectLatest {
-                    log("collectLatest $it")
+                    log("collectLatest start -> $it")
                     delay(1000)
+                    log("collectLatest end -> $it")
                 }
             }
         }
@@ -138,7 +168,7 @@ class Demo109Activity : AppCompatActivity() {
                     emit(currentValue)
                     log("after send$currentValue")
                     while (currentValue > 0) {
-                        delay(1000)// 延迟1000
+                        delay(500)// 延迟500
                         currentValue--
                         log("before send$currentValue")
                         emit(currentValue)
