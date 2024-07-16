@@ -221,7 +221,7 @@ class Demo10Activity : AppCompatActivity() {
                 try {
                     //这里外面套一层coroutineScope也可以让其捕捉到
                     //这里如果改成jobScope.async{}, 异常就会被正确捕获,app不会crash
-                    //下面无法捕捉到
+                    //下面无法被外部的try-catch捕捉到
                     val deferred = async {
                         println("1")
                         delay(500)
