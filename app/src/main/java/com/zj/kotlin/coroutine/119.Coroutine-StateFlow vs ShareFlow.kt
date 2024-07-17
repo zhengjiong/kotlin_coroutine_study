@@ -348,6 +348,9 @@ class Demo119Activity : AppCompatActivity() {
         val stateFlow1 = MutableStateFlow(false)
         val stateFlow2 = MutableStateFlow(false)
         /**
+         * 最好方案是:button15和button26, 其余的要不stateFlow1和stateFlow2都不能接收新消息,要不stateFlow1收不到消息
+         */
+        /**
          * stateFlow1中使用trycatch捕获异常, 之后的stateFlow1和stateFlow2均可继续接收消息
          */
         binding.button15.setOnClickListener {
@@ -707,21 +710,28 @@ class Demo119Activity : AppCompatActivity() {
             }
         }
 
+        /**
+         * button27  stateFlow1   catch  java.lang.NullPointerException
+         *
+         * stateFlow1抛出异常后, 之后的stateFlow1无法再接收消息但是stateFlow2可以再接收消息,
+         * 最内部的try-catch会捕获到异常,其余所有地方都不能捕获到异常
+         */
         binding.button27.setOnClickListener {
             backgroundScope.launch {
-                // 启动一个独立的协程来收集 stateFlow1，并在发生异常时重试
+                // 启动一个独立的协程来收集 stateFlow1，并在发生异常时捕获异常
                 launch {
                     stateFlow1
-                        .retryWhen { cause, attempt ->
-                            println("button27  stateFlow1   retryWhen  $cause, attempt: $attempt")
-                            attempt < 3 // 可以根据需要调整重试次数
-                        }
-                        .collectLatest { value ->
+                        .onEach { value ->
                             println("button27  stateFlow1   collectLatest  $value")
                             if (value) {
                                 throw NullPointerException()
                             }
                         }
+                        .catch { e ->
+                            //这里可以捕获到, 但是stateFlow1之后不能在吃接收消息
+                            println("button27  stateFlow1   catch  $e")
+                        }
+                        .collectLatest {}
                 }
 
                 // 启动另一个独立的协程来收集 stateFlow2
@@ -733,82 +743,6 @@ class Demo119Activity : AppCompatActivity() {
             }
         }
 
-        binding.button28.setOnClickListener {
-            backgroundScope.launch {
-                // 启动一个独立的协程来收集 stateFlow1，并在发生异常时捕获异常
-                launch {
-                    stateFlow1
-                        .catch { e ->
-                            println("button28  stateFlow1   catch  $e")
-                        }
-                        .collectLatest { value ->
-                            println("button28  stateFlow1   collectLatest  $value")
-                            if (value) {
-                                throw NullPointerException()
-                            }
-                        }
-                }
-
-                // 启动另一个独立的协程来收集 stateFlow2
-                launch {
-                    stateFlow2.collectLatest { value ->
-                        println("button28  stateFlow2   collectLatest  $value")
-                    }
-                }
-            }
-        }
-
-        binding.button29.setOnClickListener {
-            backgroundScope.launch {
-                // 启动一个独立的协程来收集 stateFlow1，并在发生异常时捕获异常
-                launch {
-                    stateFlow1
-                        .onEach { value ->
-                            println("button29  stateFlow1   collectLatest  $value")
-                            if (value) {
-                                throw NullPointerException()
-                            }
-                        }
-                        .catch { e ->
-                            println("button29  stateFlow1   catch  $e")
-                        }
-                        .collectLatest {}
-                }
-
-                // 启动另一个独立的协程来收集 stateFlow2
-                launch {
-                    stateFlow2.collectLatest { value ->
-                        println("button29  stateFlow2   collectLatest  $value")
-                    }
-                }
-            }
-        }
-
-        binding.button30.setOnClickListener {
-            backgroundScope.launch {
-                // 启动一个独立的协程来收集 stateFlow1，并在发生异常时捕获异常
-                launch {
-                    stateFlow1
-                        .retry(3) { cause ->
-                            println("button30  stateFlow1   retry  $cause")
-                            true // 始终重试，可以根据需要调整逻辑
-                        }
-                        .collectLatest { value ->
-                            println("button30  stateFlow1   collectLatest  $value")
-                            if (value) {
-                                throw NullPointerException()
-                            }
-                        }
-                }
-
-                // 启动另一个独立的协程来收集 stateFlow2
-                launch {
-                    stateFlow2.collectLatest { value ->
-                        println("button30  stateFlow2   collectLatest  $value")
-                    }
-                }
-            }
-        }
 
         binding.button16.setOnClickListener {
             backgroundScope.launch {
