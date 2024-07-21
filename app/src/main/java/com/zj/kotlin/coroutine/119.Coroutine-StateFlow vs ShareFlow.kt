@@ -730,6 +730,8 @@ class Demo119Activity : AppCompatActivity() {
                         .catch { e ->
                             //这里可以捕获到, 但是stateFlow1之后不能在吃接收消息
                             println("button27  stateFlow1   catch  $e")
+                            //发了也没有用, 已经收不到了
+                            emit(false)
                         }
                         .collectLatest {}
                 }
