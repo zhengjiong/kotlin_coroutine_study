@@ -745,6 +745,51 @@ class Demo119Activity : AppCompatActivity() {
             }
         }
 
+        /**
+         * 2024-07-21 22:29:33.225  9357-9417  System.out              com.zj.kotlin.coroutine              I  button28  stateFlow2   collectLatest  false
+         * 2024-07-21 22:29:33.225  9357-9417  System.out              com.zj.kotlin.coroutine              I  button28  stateFlow1   onEach  false
+         * 2024-07-21 22:29:34.350  9357-9416  System.out              com.zj.kotlin.coroutine              I  button28  stateFlow1   onEach  true
+         * 2024-07-21 22:29:34.351  9357-9416  System.out              com.zj.kotlin.coroutine              I  button28  stateFlow1   retryWhen  java.lang.NullPointerException
+         * 2024-07-21 22:29:34.351  9357-9416  System.out              com.zj.kotlin.coroutine              I  button28  stateFlow1   onEach  true
+         * 2024-07-21 22:30:29.517  9357-9414  System.out              com.zj.kotlin.coroutine              I  button28  stateFlow1   onEach  false
+         *
+         * stateFlow1抛出异常后, 使用retryWhen之后的stateFlow1可以再接收消息,
+         * 但是这样很危险入果每次都异常, retryWhen会一直重复执行
+         */
+        binding.button28.setOnClickListener {
+            backgroundScope.launch {
+                // 启动一个独立的协程来收集 stateFlow1，并在发生异常时捕获异常
+                launch {
+                    stateFlow1
+                        .onEach { value ->
+                            println("button28  stateFlow1   onEach  $value")
+                            if (value && !hasThrowException) {
+                                hasThrowException = true
+                                throw NullPointerException()
+                            }
+                        }
+                        .retryWhen { cause, attempt ->
+                            println("button28  stateFlow1   retryWhen  $cause")
+                            cause is NullPointerException // 只在 NullPointerException 时重试
+                        }
+                        .catch { e ->
+                            //这里catch是没用的, 无法捕获异常
+                            println("button28  stateFlow1   catch  $e")
+                            emit(false)
+                        }
+                        .collectLatest {
+
+                        }
+                }
+
+                // 启动另一个独立的协程来收集 stateFlow2
+                launch {
+                    stateFlow2.collectLatest { value ->
+                        println("button28  stateFlow2   collectLatest  $value")
+                    }
+                }
+            }
+        }
 
         binding.button16.setOnClickListener {
             backgroundScope.launch {
