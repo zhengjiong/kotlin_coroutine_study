@@ -41,6 +41,7 @@ class MainActivity : AppCompatActivity() {
             Item("119-StateFlow  ShareFlow", Demo119Activity::class.java),
             Item("130-Sample用法", Demo130Activity::class.java),
             Item("150-stateIn用法", Demo150Activity::class.java),
+            Item("151-stateIn用法2", Demo151Activity::class.java),
             Item("160-async", Demo160Activity::class.java)
         )
         recyclerView.adapter = object : RecyclerView.Adapter<ViewHolder>() {
