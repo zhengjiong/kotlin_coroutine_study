@@ -15,7 +15,7 @@ import kotlin.coroutines.EmptyCoroutineContext
  */
 
 fun main() {
-    val c = Coroutine()
+    val c = Coroutine_15_2_1()
     //c.test1()
     //c.test2()
     //c.test3()
@@ -25,7 +25,7 @@ fun main() {
     c.test7()
 }
 
-class Coroutine {
+class Coroutine_15_2_1 {
 
     fun test1() {
         runBlocking {
